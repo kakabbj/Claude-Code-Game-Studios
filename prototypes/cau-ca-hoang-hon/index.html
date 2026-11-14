@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Câu Cá Hoàng Hôn</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #0f2027;
+    color: #f2f2f2;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+  }
+  h1 { font-size: 28px; margin: 6px 0 2px; color: #ffd166; text-align: center; }
+  .subtitle { font-size: 14px; color: #b8d8e8; margin-bottom: 10px; text-align: center; }
+  .hud {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center;
+    width: 100%; max-width: 1280px; margin-bottom: 8px;
+  }
+  .stat {
+    background: #1b3a4b; border: 1px solid #2e5a73; border-radius: 8px;
+    padding: 8px 14px; font-size: 16px; min-width: 110px; text-align: center;
+  }
+  .stat b { color: #ffd166; }
+  .stat.dusk { background: #7a3b12; border-color: #ff9f43; }
+  button {
+    font-size: 17px; font-weight: bold; padding: 10px 20px; border: none; border-radius: 8px;
+    cursor: pointer; background: #ffd166; color: #3a2500;
+  }
+  button:hover { background: #ffca3a; }
+  button.secondary { background: #2e5a73; color: #fff; }
+  button.secondary:hover { background: #3a7089; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  #gameWrap { width: 100%; max-width: 1280px; position: relative; }
+  canvas {
+    display: block; width: 100%; height: auto; border-radius: 12px;
+    border: 3px solid #2e5a73; background: #1a1a1a; touch-action: none;
+  }
+  .panel {
+    width: 100%; max-width: 1280px; margin-top: 10px;
+    display: flex; flex-wrap: wrap; gap: 16px;
+  }
+  .box {
+    flex: 1 1 300px; background: #1b3a4b; border: 1px solid #2e5a73;
+    border-radius: 10px; padding: 12px 16px; font-size: 15px; line-height: 1.6;
+  }
+  .box h2 { font-size: 17px; color: #ffd166; margin-bottom: 6px; }
+  .box ul { padding-left: 20px; }
+  #catchList { list-style: none; padding-left: 0; }
+  #catchList li { padding: 2px 0; border-bottom: 1px dashed #2e5a73; }
+  #catchList li.rare { color: #ffd166; font-weight: bold; }
+  #overlay {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(5, 15, 25, 0.82); border-radius: 12px; text-align: center; padding: 20px;
+  }
+  #overlay h2 { font-size: 30px; color: #ffd166; margin-bottom: 10px; }
+  #overlay p { font-size: 18px; margin: 6px 0; }
+  #overlay button { margin-top: 14px; }
+  @media (max-width: 640px) {
+    h1 { font-size: 22px; }
+    .stat { font-size: 13px; min-width: 86px; padding: 6px 8px; }
+    button { font-size: 15px; padding: 8px 14px; }
+    .box { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<h1>Câu Cá Hoàng Hôn</h1>
+<p class="subtitle">Cá hiếm chỉ cắn câu lúc hoàng hôn — canh đúng giờ mà thả câu!</p>
+
+<div class="hud">
+  <div class="stat">Điểm: <b id="score">0</b></div>
+  <div class="stat">Ngày: <b id="day">1</b>/3</div>
+  <div class="stat" id="clockStat">Giờ: <b id="clock">06:00</b></div>
+  <div class="stat" id="phaseStat">Buổi: <b id="phase">Sáng</b></div>
+  <div class="stat">Còn lại: <b id="timer">3:00</b></div>
+  <button id="btnStart">Bắt đầu</button>
+  <button id="btnPause" class="secondary" disabled>Tạm dừng</button>
+  <button id="btnRestart" class="secondary">Chơi lại</button>
+</div>
+
+<div id="gameWrap">
+  <canvas id="game" width="1280" height="720"></canvas>
+  <div id="overlay">
+    <div>
+      <h2 id="overlayTitle">Hết giờ!</h2>
+      <p id="overlayScore"></p>
+      <p id="overlayRare"></p>
+      <p id="overlayCount"></p>
+      <button id="btnAgain">Chơi lại</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="box">
+    <h2>Cách chơi</h2>
+    <ul>
+      <li><b>Chuột / phím Space:</b> bấm để thả câu. Khi phao chìm và hiện chữ "Cắn câu!", bấm ngay để đóng cá.</li>
+      <li><b>Giữ chuột / giữ Space:</b> kéo cá vào. Nhìn đồng hồ lực căng: giữ thì lực tăng, thả ra thì lực giảm.</li>
+      <li>Lực căng chạm mức tối đa thì <b>đứt dây</b>, mất cá. Kéo đủ 100% thì bắt được cá.</li>
+      <li>Phím <b>P</b>: tạm dừng. Phím <b>R</b>: chơi lại. Phím <b>Enter</b>: bắt đầu.</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h2>Các loại cá</h2>
+    <ul>
+      <li>Cá rô — 10 điểm, cắn cả ngày.</li>
+      <li>Cá trê — 15 điểm, cắn cả ngày.</li>
+      <li>Cá chép — 20 điểm, cắn cả ngày.</li>
+      <li>Cá vàng hoàng hôn — 100 điểm, <b>chỉ lúc hoàng hôn (17:00–18:30)</b>.</li>
+      <li>Cá rồng — 200 điểm, <b>chỉ lúc hoàng hôn</b>, rất hiếm.</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h2>Cá đã bắt</h2>
+    <ul id="catchList"><li>Chưa bắt được con nào.</li></ul>
+  </div>
+</div>
+
+<script>
+"use strict";
+var canvas = document.getElementById("game");
+var ctx = canvas.getContext("2d");
+var W = 1280, H = 720;
+var WATER_Y = 380;
+
+var FISH_TYPES = {
+  ro:   { name: "Cá rô",            points: 10,  color: "#8fa98f", size: 34, speed: 55,  rare: false },
+  tre:  { name: "Cá trê",           points: 15,  color: "#5b4a68", size: 46, speed: 40,  rare: false },
+  chep: { name: "Cá chép",          points: 20,  color: "#e07b39", size: 44, speed: 48,  rare: false },
+  vang: { name: "Cá vàng hoàng hôn", points: 100, color: "#ffd700", size: 52, speed: 70,  rare: true },
+  rong: { name: "Cá rồng",           points: 200, color: "#e63946", size: 64, speed: 85,  rare: true }
+};
+
+var state = "menu";           // menu | playing | paused | over
+var fishing = "idle";         // idle | waiting | bite | reeling
+var elapsed = 0;              // seconds since session start (playing time)
+var sessionLen = 180;         // 3 minutes = 3 in-game days
+var dayLen = 60;              // one in-game day = 60 real seconds
+var score = 0;
+var catches = [];
+var fishes = [];
+var spawnTimer = 0;
+var bobber = { x: 0, y: 0, active: false };
+var biteTimer = 0, biteWindow = 0;
+var hooked = null;
+var reelProgress = 0, tension = 0, struggle = 0, reelTime = 0;
+var toast = "", toastTimer = 0, flashTimer = 0;
+var clouds = [];
+var duskAnnounced = false;
+var lastDay = 1;
+
+for (var i = 0; i < 5; i++) {
+  clouds.push({ x: Math.random() * W, y: 40 + Math.random() * 120, s: 0.6 + Math.random() * 0.9, v: 6 + Math.random() * 10 });
+}
+
+function fmtClock(mins) {
+  var h = Math.floor(mins / 60), m = Math.floor(mins % 60);
+  return (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
+}
+// In-game minutes: day runs 06:00 -> 21:00 over dayLen seconds.
+function gameMinutes() {
+  if (elapsed >= sessionLen) return 1260; // stay at night (21:00) after the session ends
+  var inDay = elapsed % dayLen;
+  return 360 + (inDay / dayLen) * 900;
+}
+function currentDay() { return Math.min(3, Math.floor(elapsed / dayLen) + 1); }
+function isDusk() {
+  var m = gameMinutes();
+  return m >= 1020 && m < 1110; // 17:00 - 18:30
+}
+function phaseName() {
+  var m = gameMinutes();
+  if (m < 660) return "Sáng";
+  if (m < 900) return "Trưa";
+  if (m < 1020) return "Chiều";
+  if (m < 1110) return "Hoàng hôn";
+  return "Tối";
+}
+function skyColors() {
+  // keyframes: [minutes, skyTop, skyBottom, waterTop, waterBottom]
+  var keys = [
+    [360,  "#7ec8e3", "#cfeef7", "#3f8fb5", "#1d5f80"],
+    [660,  "#3fa7d6", "#bfe8f5", "#2f7ea8", "#175a7d"],
+    [900,  "#f7b733", "#fde6a8", "#4a90b8", "#1e5a80"],
+    [1020, "#ff7e3d", "#ffb347", "#7a4a8a", "#3d2b63"],
+    [1110, "#ff5e62", "#c94b7c", "#5a3a7a", "#2c2145"],
+    [1260, "#1b2a4a", "#3a4a6b", "#22395e", "#101d33"]
+  ];
+  var m = gameMinutes();
+  var a = keys[0], b = keys[keys.length - 1];
+  for (var i = 0; i < keys.length - 1; i++) {
+    if (m >= keys[i][0] && m <= keys[i + 1][0]) { a = keys[i]; b = keys[i + 1]; break; }
+  }
+  var t = (m - a[0]) / Math.max(1, b[0] - a[0]);
+  t = Math.max(0, Math.min(1, t));
+  function mix(c1, c2) {
+    var p1 = [parseInt(c1.slice(1, 3), 16), parseInt(c1.slice(3, 5), 16), parseInt(c1.slice(5, 7), 16)];
+    var p2 = [parseInt(c2.slice(1, 3), 16), parseInt(c2.slice(3, 5), 16), parseInt(c2.slice(5, 7), 16)];
+    var r = Math.round(p1[0] + (p2[0] - p1[0]) * t);
+    var g = Math.round(p1[1] + (p2[1] - p1[1]) * t);
+    var bl = Math.round(p1[2] + (p2[2] - p1[2]) * t);
+    return "rgb(" + r + "," + g + "," + bl + ")";
+  }
+  return { top: mix(a[1], b[1]), bottom: mix(a[2], b[2]), wTop: mix(a[3], b[3]), wBot: mix(a[4], b[4]) };
+}
+
+function spawnFish() {
+  var dusk = isDusk();
+  var roll = Math.random();
+  var type;
+  if (dusk && roll < 0.16) type = "rong";
+  else if (dusk && roll < 0.42) type = "vang";
+  else {
+    var r2 = Math.random();
+    type = r2 < 0.4 ? "ro" : (r2 < 0.7 ? "chep" : "tre");
+  }
+  var dir = Math.random() < 0.5 ? 1 : -1;
+  var t = FISH_TYPES[type];
+  fishes.push({
+    type: type, x: dir === 1 ? -80 : W + 80,
+    y: WATER_Y + 50 + Math.random() * 240,
+    dir: dir, speed: t.speed * (0.7 + Math.random() * 0.6),
+    wob: Math.random() * Math.PI * 2
+  });
+}
+function pickHookedFish() {
+  var dusk = isDusk();
+  var roll = Math.random();
+  var type;
+  if (dusk && roll < 0.12) type = "rong";
+  else if (dusk && roll < 0.45) type = "vang";
+  else {
+    var r2 = Math.random();
+    type = r2 < 0.4 ? "ro" : (r2 < 0.7 ? "chep" : "tre");
+  }
+  return { type: type, strength: FISH_TYPES[type].rare ? 1.6 : 1.0 };
+}
+
+function showToast(msg, secs) {
+  toast = msg; toastTimer = secs || 2.5;
+}
+function updateCatchList() {
+  var ul = document.getElementById("catchList");
+  ul.innerHTML = "";
+  if (catches.length === 0) {
+    var li = document.createElement("li");
+    li.textContent = "Chưa bắt được con nào.";
+    ul.appendChild(li);
+    return;
+  }
+  var sorted = catches.slice().sort(function (a, b) { return b.points - a.points; });
+  sorted.slice(0, 8).forEach(function (c) {
+    var item = document.createElement("li");
+    item.textContent = c.name + " — " + c.points + " điểm";
+    if (c.rare) item.className = "rare";
+    ul.appendChild(item);
+  });
+}
+
+function startGame() {
+  elapsed = 0; score = 0; catches = []; fishes = [];
+  fishing = "idle"; bobber.active = false; hooked = null;
+  reelProgress = 0; tension = 0; duskAnnounced = false; lastDay = 1;
+  document.getElementById("score").textContent = "0";
+  document.getElementById("overlay").style.display = "none";
+  document.getElementById("btnStart").disabled = true;
+  document.getElementById("btnPause").disabled = false;
+  document.getElementById("btnPause").textContent = "Tạm dừng";
+  updateCatchList();
+  state = "playing";
+  showToast("Ngày 1 — Trời sáng, thả câu đi!", 3);
+}
+function pauseGame() {
+  if (state === "playing") {
+    state = "paused";
+    document.getElementById("btnPause").textContent = "Tiếp tục";
+  } else if (state === "paused") {
+    state = "playing";
+    document.getElementById("btnPause").textContent = "Tạm dừng";
+  }
+}
+function endGame() {
+  state = "over";
+  fishing = "idle"; bobber.active = false;
+  document.getElementById("btnStart").disabled = false;
+  document.getElementById("btnPause").disabled = true;
+  var best = null;
+  catches.forEach(function (c) { if (!best || c.points > best.points) best = c; });
+  document.getElementById("overlayTitle").textContent = "Hết 3 ngày — Kết thúc!";
+  document.getElementById("overlayScore").textContent = "Tổng điểm: " + score;
+  document.getElementById("overlayRare").textContent = best
+    ? "Cá hiếm nhất: " + best.name + " (" + best.points + " điểm)"
+    : "Bạn chưa bắt được con cá hiếm nào. Thử canh giờ hoàng hôn nhé!";
+  document.getElementById("overlayCount").textContent = "Tổng số cá đã bắt: " + catches.length + " con";
+  document.getElementById("overlay").style.display = "flex";
+}
+
+function castLine(x) {
+  if (state !== "playing" || fishing !== "idle") return;
+  bobber.x = x || (420 + Math.random() * 620);
+  bobber.y = WATER_Y + 30 + Math.random() * 120;
+  bobber.active = true;
+  fishing = "waiting";
+  biteTimer = 2 + Math.random() * 3.5;
+  showToast("Đã thả câu... chờ cá cắn.", 2);
+}
+function hookFish() {
+  if (fishing !== "bite") return;
+  hooked = pickHookedFish();
+  fishing = "reeling";
+  reelProgress = 0; tension = 25; struggle = 0; reelTime = 0;
+  showToast("Đóng cá! Giữ chuột để kéo, đừng để đứt dây!", 2);
+}
+function catchFish() {
+  var t = FISH_TYPES[hooked.type];
+  score += t.points;
+  catches.push({ name: t.name, points: t.points, rare: t.rare });
+  document.getElementById("score").textContent = String(score);
+  updateCatchList();
+  showToast("Bắt được " + t.name + "! +" + t.points + " điểm", 3);
+  flashTimer = 0.4;
+  fishing = "idle"; bobber.active = false; hooked = null;
+}
+function loseFish(reason) {
+  showToast(reason, 3);
+  fishing = "idle"; bobber.active = false; hooked = null;
+}
+
+var pressing = false;
+function pressAction() {
+  if (state === "menu" || state === "over") { startGame(); return; }
+  if (state === "paused") { pauseGame(); return; }
+  if (fishing === "idle") castLine();
+  else if (fishing === "bite") hookFish();
+  // while waiting or reeling, press = hold to reel (handled by `pressing`)
+}
+function releaseAction() { pressing = false; }
+
+canvas.addEventListener("mousedown", function (e) {
+  pressing = true;
+  var rect = canvas.getBoundingClientRect();
+  var x = (e.clientX - rect.left) * (W / rect.width);
+  if (fishing === "idle") castLine(Math.max(380, Math.min(1150, x)));
+  else pressAction();
+});
+window.addEventListener("mouseup", function () { pressing = false; });
+canvas.addEventListener("touchstart", function (e) {
+  e.preventDefault();
+  pressing = true;
+  var rect = canvas.getBoundingClientRect();
+  var t = e.touches[0];
+  var x = (t.clientX - rect.left) * (W / rect.width);
+  if (fishing === "idle") castLine(Math.max(380, Math.min(1150, x)));
+  else pressAction();
+}, { passive: false });
+canvas.addEventListener("touchend", function (e) { e.preventDefault(); pressing = false; }, { passive: false });
+
+document.addEventListener("keydown", function (e) {
+  if (e.code === "Space") {
+    e.preventDefault();
+    if (!e.repeat) { pressing = true; pressAction(); }
+  } else if (e.code === "KeyP") {
+    if (state === "playing" || state === "paused") pauseGame();
+  } else if (e.code === "KeyR") {
+    startGame();
+  } else if (e.code === "Enter") {
+    if (state === "menu" || state === "over") startGame();
+  }
+});
+document.addEventListener("keyup", function (e) {
+  if (e.code === "Space") pressing = false;
+});
+document.getElementById("btnStart").addEventListener("click", startGame);
+document.getElementById("btnPause").addEventListener("click", pauseGame);
+document.getElementById("btnRestart").addEventListener("click", startGame);
+document.getElementById("btnAgain").addEventListener("click", startGame);
+
+function update(dt) {
+  if (state !== "playing") return;
+  elapsed += dt;
+  if (elapsed >= sessionLen) { elapsed = sessionLen; endGame(); return; }
+  var day = currentDay();
+  if (day !== lastDay) {
+    lastDay = day;
+    duskAnnounced = false;
+    showToast("Ngày " + day + " — Trời sáng rồi, tiếp tục câu!", 3);
+  }
+  if (isDusk() && !duskAnnounced) {
+    duskAnnounced = true;
+    showToast("HOÀNG HÔN RỒI! Cá vàng và cá rồng đang cắn câu!", 4);
+    flashTimer = 0.5;
+  }
+  // clouds drift
+  clouds.forEach(function (c) {
+    c.x += c.v * dt;
+    if (c.x > W + 120) c.x = -160;
+  });
+  // spawn fish
+  spawnTimer -= dt;
+  if (spawnTimer <= 0 && fishes.length < 9) {
+    spawnFish();
+    spawnTimer = 0.7 + Math.random() * 0.8;
+  }
+  fishes.forEach(function (f) {
+    f.x += f.dir * f.speed * dt;
+    f.wob += dt * 3;
+  });
+  fishes = fishes.filter(function (f) { return f.x > -120 && f.x < W + 120; });
+  // remove rare fish when dusk ends
+  if (!isDusk()) {
+    fishes = fishes.filter(function (f) { return !FISH_TYPES[f.type].rare; });
+  }
+  // fishing flow
+  if (fishing === "waiting") {
+    biteTimer -= dt;
+    if (biteTimer <= 0) {
+      fishing = "bite";
+      biteWindow = 1.6;
+      flashTimer = 0.3;
+      showToast("CẮN CÂU! Bấm ngay!", 1.6);
+    }
+  } else if (fishing === "bite") {
+    biteWindow -= dt;
+    if (biteWindow <= 0) loseFish("Chậm tay quá, cá chạy mất rồi!");
+  } else if (fishing === "reeling" && hooked) {
+    reelTime += dt;
+    struggle += dt;
+    var pull = 0;
+    if (struggle > 0.9) {
+      struggle = 0;
+      pull = (8 + Math.random() * 16) * hooked.strength;
+    }
+    if (pressing) {
+      reelProgress += 26 * dt;
+      tension += 30 * dt;
+    } else {
+      tension -= 42 * dt;
+    }
+    tension += pull;
+    tension = Math.max(0, Math.min(100, tension));
+    if (tension >= 100) { loseFish("Đứt dây rồi! Lực căng quá mạnh."); return; }
+    if (reelTime > 14) { loseFish("Cá giãy thoát rồi! Kéo nhanh hơn nhé."); return; }
+    if (reelProgress >= 100) catchFish();
+  }
+  if (toastTimer > 0) toastTimer -= dt;
+  if (flashTimer > 0) flashTimer -= dt;
+  // HUD
+  document.getElementById("day").textContent = String(currentDay());
+  document.getElementById("clock").textContent = fmtClock(gameMinutes());
+  document.getElementById("phase").textContent = phaseName();
+  var remain = Math.max(0, sessionLen - elapsed);
+  var rm = Math.floor(remain / 60), rs = Math.floor(remain % 60);
+  document.getElementById("timer").textContent = rm + ":" + (rs < 10 ? "0" + rs : rs);
+  var dusk = isDusk();
+  document.getElementById("clockStat").className = "stat" + (dusk ? " dusk" : "");
+  document.getElementById("phaseStat").className = "stat" + (dusk ? " dusk" : "");
+}
+
+function drawFishShape(x, y, size, color, dir, wob, rare) {
+  ctx.save();
+  ctx.translate(x, y + Math.sin(wob) * 3);
+  ctx.scale(dir, 1);
+  // body
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, size / 2, size / 4.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // tail
+  ctx.beginPath();
+  ctx.moveTo(-size / 2 + 4, 0);
+  ctx.lineTo(-size / 2 - size / 3, -size / 4);
+  ctx.lineTo(-size / 2 - size / 3, size / 4);
+  ctx.closePath();
+  ctx.fill();
+  // dorsal fin
+  ctx.beginPath();
+  ctx.moveTo(-size / 6, -size / 4.2);
+  ctx.lineTo(0, -size / 2.2);
+  ctx.lineTo(size / 6, -size / 4.2);
+  ctx.closePath();
+  ctx.fill();
+  // eye
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(size / 4, -size / 14, size / 12, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#111";
+  ctx.beginPath(); ctx.arc(size / 4 + 2, -size / 14, size / 24, 0, Math.PI * 2); ctx.fill();
+  if (rare) {
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, 0, size / 2 + 3, size / 4.2 + 3, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function draw() {
+  var colors = skyColors();
+  var m = gameMinutes();
+  // sky
+  var sky = ctx.createLinearGradient(0, 0, 0, WATER_Y);
+  sky.addColorStop(0, colors.top);
+  sky.addColorStop(1, colors.bottom);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, WATER_Y);
+  // sun / moon
+  var dayFrac = (m - 360) / 900;
+  var sunX = 120 + dayFrac * (W - 240);
+  var sunY = 300 - Math.sin(dayFrac * Math.PI) * 210;
+  if (m < 1140) {
+    ctx.fillStyle = m >= 1020 ? "#ff8c42" : "#ffd94d";
+    ctx.beginPath(); ctx.arc(sunX, Math.max(50, sunY), m >= 1020 ? 52 : 42, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(255,220,120,0.25)";
+    ctx.beginPath(); ctx.arc(sunX, Math.max(50, sunY), 72, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = "#f4f1de";
+    ctx.beginPath(); ctx.arc(W - 180, 110, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = colors.top;
+    ctx.beginPath(); ctx.arc(W - 168, 100, 30, 0, Math.PI * 2); ctx.fill();
+  }
+  // clouds
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  clouds.forEach(function (c) {
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, 52 * c.s, 18 * c.s, 0, 0, Math.PI * 2);
+    ctx.ellipse(c.x + 34 * c.s, c.y + 6, 38 * c.s, 15 * c.s, 0, 0, Math.PI * 2);
+    ctx.ellipse(c.x - 36 * c.s, c.y + 7, 34 * c.s, 14 * c.s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  // distant hills
+  ctx.fillStyle = "rgba(46,90,60,0.55)";
+  ctx.beginPath();
+  ctx.moveTo(0, WATER_Y);
+  ctx.quadraticCurveTo(300, WATER_Y - 90, 640, WATER_Y - 30);
+  ctx.quadraticCurveTo(980, WATER_Y - 100, W, WATER_Y - 40);
+  ctx.lineTo(W, WATER_Y); ctx.closePath(); ctx.fill();
+  // water
+  var water = ctx.createLinearGradient(0, WATER_Y, 0, H);
+  water.addColorStop(0, colors.wTop);
+  water.addColorStop(1, colors.wBot);
+  ctx.fillStyle = water;
+  ctx.fillRect(0, WATER_Y, W, H - WATER_Y);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 2;
+  for (var i = 0; i < 6; i++) {
+    var wy = WATER_Y + 30 + i * 52;
+    var off = (elapsed * 12 + i * 130) % 220;
+    ctx.beginPath();
+    ctx.moveTo(300 + off, wy);
+    ctx.quadraticCurveTo(340 + off, wy - 6, 380 + off, wy);
+    ctx.stroke();
+  }
+  // fish under water
+  fishes.forEach(function (f) {
+    var t = FISH_TYPES[f.type];
+    ctx.globalAlpha = 0.9;
+    drawFishShape(f.x, f.y, t.size, t.color, f.dir, f.wob, t.rare);
+    ctx.globalAlpha = 1;
+  });
+  // dock
+  ctx.fillStyle = "#6b4226";
+  ctx.fillRect(60, WATER_Y - 8, 260, 18);
+  ctx.fillStyle = "#8b5a2b";
+  for (var p = 0; p < 5; p++) {
+    ctx.fillRect(70 + p * 50, WATER_Y - 8, 44, 18);
+    ctx.strokeStyle = "#5a3a1a";
+    ctx.strokeRect(70 + p * 50, WATER_Y - 8, 44, 18);
+  }
+  ctx.fillStyle = "#5a3a1a";
+  ctx.fillRect(80, WATER_Y + 10, 14, 90);
+  ctx.fillRect(280, WATER_Y + 10, 14, 90);
+  // fisherman (drawn with shapes)
+  var fx = 190, fy = WATER_Y - 8;
+  ctx.fillStyle = "#2b2d42";
+  ctx.fillRect(fx - 16, fy - 78, 32, 52);            // body
+  ctx.fillStyle = "#e8b98a";
+  ctx.beginPath(); ctx.arc(fx, fy - 92, 15, 0, Math.PI * 2); ctx.fill(); // head
+  ctx.fillStyle = "#d9a441";
+  ctx.beginPath(); ctx.ellipse(fx, fy - 104, 24, 7, 0, 0, Math.PI * 2); ctx.fill(); // hat brim
+  ctx.beginPath(); ctx.arc(fx, fy - 106, 13, Math.PI, 0); ctx.fill();   // hat top
+  ctx.strokeStyle = "#2b2d42"; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.moveTo(fx - 14, fy - 70); ctx.lineTo(fx - 8, fy - 26); ctx.stroke(); // leg L
+  ctx.beginPath(); ctx.moveTo(fx + 12, fy - 70); ctx.lineTo(fx + 18, fy - 26); ctx.stroke(); // leg R
+  ctx.beginPath(); ctx.moveTo(fx + 10, fy - 72); ctx.lineTo(fx + 78, fy - 150); ctx.stroke(); // arm to rod
+  // fishing rod
+  ctx.strokeStyle = "#7a4a21"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(fx + 40, fy - 110); ctx.lineTo(fx + 330, fy - 210); ctx.stroke();
+  // line + bobber
+  if (bobber.active) {
+    var tipX = fx + 330, tipY = fy - 210;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tipX, tipY);
+    ctx.quadraticCurveTo((tipX + bobber.x) / 2, tipY + 120, bobber.x, bobber.y - 8);
+    ctx.stroke();
+    var dip = fishing === "bite" ? 8 : Math.sin(elapsed * 2) * 2;
+    ctx.fillStyle = "#e63946";
+    ctx.beginPath(); ctx.arc(bobber.x, bobber.y + dip, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(bobber.x, bobber.y + dip - 4, 9, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = "#e63946"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bobber.x, bobber.y + dip - 13); ctx.lineTo(bobber.x, bobber.y + dip + 9); ctx.stroke();
+  }
+  // reeling meter
+  if (fishing === "reeling" && hooked) {
+    var t2 = FISH_TYPES[hooked.type];
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(340, 60, 600, 140);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px Arial";
+    ctx.textAlign = "left";
+    ctx.fillText("Đang kéo: " + t2.name + " — Giữ chuột / Space để kéo!", 360, 88);
+    // progress bar
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px Arial";
+    ctx.fillText("Tiến độ: " + Math.floor(reelProgress) + "%", 360, 114);
+    ctx.fillStyle = "#333";
+    ctx.fillRect(360, 120, 560, 14);
+    ctx.fillStyle = "#4cc9f0";
+    ctx.fillRect(360, 120, 560 * Math.min(1, reelProgress / 100), 14);
+    // tension bar
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px Arial";
+    ctx.fillText("Lực căng: " + Math.floor(tension) + "%" + (tension > 75 ? " — SẮP ĐỨT! Thả ra!" : ""), 360, 158);
+    ctx.fillStyle = "#333";
+    ctx.fillRect(360, 164, 560, 14);
+    ctx.fillStyle = tension > 75 ? "#e63946" : (tension > 45 ? "#ffd166" : "#06d6a0");
+    ctx.fillRect(360, 164, 560 * (tension / 100), 14);
+    ctx.textAlign = "left";
+  }
+  // dusk banner
+  if (isDusk() && state === "playing") {
+    ctx.fillStyle = "rgba(122,59,18,0.85)";
+    ctx.fillRect(0, 8, W, 40);
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "bold 24px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("HOÀNG HÔN — Cá vàng và cá rồng đang cắn câu!", W / 2, 36);
+    ctx.textAlign = "left";
+  }
+  // toast
+  if (toastTimer > 0) {
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    var tw = ctx.measureText(toast).width + 40;
+    ctx.fillRect((W - tw) / 2, H - 110, tw, 44);
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "bold 22px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(toast, W / 2, H - 80);
+    ctx.textAlign = "left";
+  }
+  // bite flash
+  if (fishing === "bite") {
+    ctx.fillStyle = "rgba(255,60,60," + (0.25 + 0.2 * Math.sin(elapsed * 14)) + ")";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 52px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("CẮN CÂU!", W / 2, 200);
+    ctx.textAlign = "left";
+  }
+  if (flashTimer > 0) {
+    ctx.fillStyle = "rgba(255,209,102," + (flashTimer * 0.8) + ")";
+    ctx.fillRect(0, 0, W, H);
+  }
+  // menu / paused text
+  if (state === "menu") {
+    ctx.fillStyle = "rgba(5,15,25,0.72)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "bold 46px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("Câu Cá Hoàng Hôn", W / 2, 300);
+    ctx.fillStyle = "#fff";
+    ctx.font = "24px Arial";
+    ctx.fillText("Bấm Bắt đầu, thả câu, và canh giờ hoàng hôn để bắt cá hiếm!", W / 2, 350);
+    ctx.font = "20px Arial";
+    ctx.fillText("Chuột / Space: thả câu — Giữ chuột / Space: kéo cá — P: tạm dừng", W / 2, 390);
+    ctx.textAlign = "left";
+  }
+  if (state === "paused") {
+    ctx.fillStyle = "rgba(5,15,25,0.6)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 44px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("TẠM DỪNG", W / 2, 360);
+    ctx.textAlign = "left";
+  }
+}
+
+var last = performance.now();
+function loop(now) {
+  var dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+updateCatchList();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
