@@ -114,7 +114,7 @@
       <h2 style="margin-top:12px">Nước đi</h2>
       <ol id="history"></ol>
       <p class="legend">Quân Đỏ: 帥 Tướng, 仕 Sĩ, 相 Tượng, 俥 Xe, 傌 Mã, 炮 Pháo, 兵 Tốt &nbsp;—&nbsp; Quân Đen: 將, 士, 象, 車, 馬, 砲, 卒.<br>
-      Bấm vào 1 quân của bạn để xem các nước đi được, rồi bấm vào ô đích để đi.</p>
+      Bấm vào 1 quân của bạn rồi bấm vào ô đích để đi (không hiện sẵn các nước đi được). Đi sai luật sẽ báo “Đi lỗi” và không cho đi.</p>
     </div>
   </div>
   <div class="rules">
@@ -377,7 +377,8 @@ if (typeof window !== 'undefined') window.__xq = XQ;
   let history = []; // {mv, snap, text}
   let noCapture = 0;
   let selected = null; // square index
-  let dests = [];
+  let dests = []; // chi de kiem tra nuoc di hop le, KHONG hien len ban
+  let moveError = null; // thong bao "Di loi" khi nguoi choi di sai
   let gameOver = false;
   let winner = null; // 'r' | 'b' | 'draw'
   let aiThinking = false;
@@ -424,7 +425,8 @@ if (typeof window !== 'undefined') window.__xq = XQ;
       hlEl.appendChild(d);
     };
     if (lastMove) { mk('last', lastMove.from); mk('last', lastMove.to); }
-    for (const mv of dests) mk(board[mv.to] ? 'dest cap' : 'dest', mv.to);
+    // Khong hien cac nuoc di duoc (theo yeu cau: nguoi choi tu di, sai thi bao loi).
+    // Chi giu dau vang o nuoc vua di (lastMove) phia tren.
     // captured: capR = black pieces captured by Red, capB = red pieces captured by Black
     const capR = [], capB = [];
     for (const h of history) {
@@ -449,6 +451,9 @@ if (typeof window !== 'undefined') window.__xq = XQ;
     if (gameOver) {
       if (winner === 'draw') statusEl.textContent = 'Hòa!';
       else statusEl.textContent = (winner === playerSide ? 'Bạn thắng!' : 'AI thắng!') + ' — ' + sideName(winner) + ' thắng.';
+    } else if (moveError) {
+      statusEl.textContent = moveError;
+      statusEl.className = 'check';
     } else if (aiThinking) {
       statusEl.textContent = 'AI đang nghĩ…';
       statusEl.className = 'think';
@@ -493,7 +498,7 @@ if (typeof window !== 'undefined') window.__xq = XQ;
     noCapture = captured ? 0 : noCapture + 1;
     turn = XQ.other(turn);
     lastMove = mv;
-    selected = null; dests = [];
+    selected = null; dests = []; moveError = null;
     history.push({ mv, snap, text });
     render();
     if (endCheck()) return;
@@ -519,16 +524,27 @@ if (typeof window !== 'undefined') window.__xq = XQ;
     const p = board[i];
     if (selected !== null) {
       const mv = dests.find(d => d.to === i);
-      if (mv) { doMove(mv); return; }
+      if (mv) { moveError = null; doMove(mv); return; }
+      if (p && XQ.sideOf(p) === playerSide) {
+        // bam sang quan khac cua minh: doi lua chon, khong bao loi
+        moveError = null;
+        selected = i;
+        dests = XQ.legalMoves(board, playerSide).filter(m => m.from === i);
+        render();
+        return;
+      }
+      // da chon quan roi ma bam o khong di duoc: bao loi, KHONG cho di, giu nguyen lua chon
+      moveError = 'Đi lỗi! Nước này không hợp lệ — thử nước khác.';
+      render();
+      return;
     }
     if (p && XQ.sideOf(p) === playerSide) {
+      moveError = null;
       selected = i;
       dests = XQ.legalMoves(board, playerSide).filter(m => m.from === i);
       render();
-    } else {
-      selected = null; dests = [];
-      render();
     }
+    // chua chon quan ma bam o trong: khong lam gi
   }
 
   boardEl.addEventListener('click', e => {
@@ -544,7 +560,7 @@ if (typeof window !== 'undefined') window.__xq = XQ;
     playerSide = $('side').value;
     aiSide = XQ.other(playerSide);
     difficulty = parseInt($('diff').value, 10);
-    history = []; noCapture = 0; selected = null; dests = [];
+    history = []; noCapture = 0; selected = null; dests = []; moveError = null;
     gameOver = false; winner = null; aiThinking = false; lastMove = null;
     render();
     if (turn === aiSide) scheduleAi();
@@ -561,7 +577,7 @@ if (typeof window !== 'undefined') window.__xq = XQ;
     };
     undoOne();
     if (turn === aiSide && history.length > 0) undoOne();
-    gameOver = false; winner = null; selected = null; dests = [];
+    gameOver = false; winner = null; selected = null; dests = []; moveError = null;
     render();
   });
 
@@ -569,7 +585,7 @@ if (typeof window !== 'undefined') window.__xq = XQ;
   window.__xq.setPosition = function (pieces, side) {
     board = XQ.boardFrom(pieces);
     turn = side || 'r';
-    history = []; noCapture = 0; selected = null; dests = [];
+    history = []; noCapture = 0; selected = null; dests = []; moveError = null;
     gameOver = false; winner = null; aiThinking = false; lastMove = null;
     render();
     endCheck();
