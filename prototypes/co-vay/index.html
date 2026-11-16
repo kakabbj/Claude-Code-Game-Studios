@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cờ Vây — Chơi với AI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; background: #2b2118; color: #f2e8d5; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 28px; margin: 4px 0 2px; color: #ffd97a; }
+  .sub { text-align: center; color: #d8c9a8; margin-bottom: 12px; font-size: 14px; }
+  .main { display: flex; gap: 12px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  #boardWrap { position: relative; flex: none; }
+  /* Ban co vay 9x9: cac giao diem la o grid; duong ke ve bang ::before/::after
+     cua tung o (cat bot o ria). Da co vang go, quan tron. */
+  #board { position: sticky; top: 12px; width: min(92vw, 460px); aspect-ratio: 1; display: grid;
+    grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr);
+    background: #e3b96f; border: 4px solid #7a4a21; border-radius: 4px; }
+  .pt { position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; }
+  .pt::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: #5d3a1a; }
+  .pt::after { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #5d3a1a; }
+  .pt.f0::before { left: 50%; }
+  .pt.f8::before { right: 50%; }
+  .pt.r0::after { top: 50%; }
+  .pt.r8::after { bottom: 50%; }
+  .pt .hoshi { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #5d3a1a; z-index: 1; pointer-events: none; }
+  .pt .stone { position: relative; z-index: 2; width: 92%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,.55); }
+  .pt .stone.B { background: radial-gradient(circle at 35% 30%, #5a5a5a, #000 65%); }
+  .pt .stone.W { background: radial-gradient(circle at 35% 30%, #fff, #c9c9c9 70%); }
+  .pt .stone.last { box-shadow: 0 0 0 2px #ffd700, 0 2px 4px rgba(0,0,0,.55); }
+  .pt .ghost { display: none; position: relative; z-index: 2; width: 92%; aspect-ratio: 1; border-radius: 50%; pointer-events: none; }
+  #board.turn-B .pt:hover .ghost { display: block; background: #000; opacity: .3; }
+  #board.turn-W .pt:hover .ghost { display: block; background: #fff; opacity: .35; }
+  .pt .coord { position: absolute; font-size: 10px; font-weight: 700; color: #5d3a1a; pointer-events: none; z-index: 1; }
+  .pt .coord.f { left: 2px; bottom: 1px; }
+  .pt .coord.r { right: 2px; top: 1px; }
+  .panel { width: min(92vw, 300px); background: #3a2d1e; border: 1px solid #6b5233; border-radius: 8px; padding: 14px; }
+  .panel h2 { font-size: 17px; margin-bottom: 8px; color: #ffd97a; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+  label { font-size: 14px; }
+  select, button { font-size: 14px; padding: 7px 10px; border-radius: 6px; border: 1px solid #8a6d3b; background: #f7ead0; color: #2b2118; cursor: pointer; }
+  button.primary { background: #c0392b; color: #fff; border-color: #c0392b; font-weight: 700; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { font-size: 16px; font-weight: 700; min-height: 24px; margin: 4px 0; }
+  #status.check { color: #ff6b5e; }
+  #status.think { color: #7ec8ff; }
+  #history { list-style: none; max-height: 240px; overflow-y: auto; background: #241a10; border-radius: 6px; padding: 8px 10px; font-size: 14px; line-height: 1.7; }
+  #history li:nth-child(odd) { background: rgba(255,255,255,.04); }
+  .cap { font-size: 14px; line-height: 1.7; margin-top: 8px; }
+  .legend { font-size: 13px; color: #d8c9a8; margin-top: 10px; line-height: 1.7; }
+  #banner { display: none; margin-top: 10px; padding: 12px; border-radius: 8px; background: #14532d; color: #fff; font-size: 17px; font-weight: 700; text-align: center; }
+  #banner.lose { background: #7f1d1d; }
+  #banner.draw { background: #57534e; }
+  .rules { max-width: 1020px; margin: 14px auto 0; background: #3a2d1e; border: 1px solid #6b5233; border-radius: 8px; padding: 14px 18px; font-size: 14px; line-height: 1.8; }
+  .rules h2 { color: #ffd97a; font-size: 17px; margin-bottom: 6px; }
+  @media (max-width: 700px) { h1 { font-size: 22px; } .panel { width: min(94vw, 540px); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Cờ Vây</h1>
+  <p class="sub">Chơi với máy (AI) — bàn 9x9, không cần mạng, không cần key, AI chạy ngay trong trình duyệt.</p>
+  <div class="main">
+    <div id="boardWrap">
+      <div id="board" class="turn-B" aria-label="Bàn cờ vây 9x9"></div>
+    </div>
+    <div class="panel">
+      <h2>Ván cờ</h2>
+      <div class="row">
+        <label>Độ khó:
+          <select id="diff">
+            <option value="1">Dễ</option>
+            <option value="2" selected>Vừa</option>
+            <option value="3">Khó</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <button id="newBtn" class="primary">Ván mới</button>
+        <button id="passBtn">Bỏ lượt</button>
+        <button id="undoBtn">Hoàn tác</button>
+        <button id="resignBtn">Xin thua</button>
+      </div>
+      <div id="status">Lượt của bạn (Đen).</div>
+      <div class="cap" id="capBlack">Đen ăn: —</div>
+      <div class="cap" id="capWhite">Trắng ăn: —</div>
+      <div class="cap" id="scoreEst">Điểm ước lượng: Đen 0 – Trắng 7.5</div>
+      <h2 style="margin-top:12px">Nước đi</h2>
+      <ol id="history"></ol>
+      <p class="legend">Bấm vào 1 giao điểm để đặt quân (game không hiện sẵn các nước đi được). Quân đã đặt không di chuyển. Đi sai luật sẽ báo “Đi lỗi” và không cho đi.<br>
+      Bạn cầm Đen, đi trước. Komi 7.5 điểm cho Trắng.</p>
+      <div id="banner"></div>
+    </div>
+  </div>
+  <div class="rules">
+    <h2>Luật chơi (tóm tắt)</h2>
+    <p>Đen đi trước, 2 bên lần lượt đặt 1 quân vào giao điểm trống. Một nhóm quân liên kề nhau (dọc/ngang) có số <b>khí</b> là số giao điểm trống kề nó — nhóm nào hết khí thì bị nhấc khỏi bàn, bên đối phương được tính là đã ăn. <b>Không được tự sát</b>: đặt quân mà nhóm của mình hết khí và không ăn được quân địch. <b>Luật Ko</b>: không được ăn lại ngay 1 quân vừa bị ăn (phải đi chỗ khác trước 1 nước). <b>Bỏ lượt</b> khi không muốn đi nữa; 2 bên bỏ lượt liên tiếp thì hết ván và tính điểm theo luật Trung Quốc: điểm = số quân trên bàn + đất trống bao quanh, cộng 7.5 komi cho Trắng. Góc 3-3 và điểm sao (hoshi) là chỗ tốt để mở đầu.</p>
+  </div>
+</div>
+<script>
+/* ENGINE-START */
+const GO = (() => {
+  const N = 9, SZ = 81, KOMI = 7.5;
+  const idx = (r, f) => r * 9 + f;
+  const rowOf = i => (i / 9) | 0, colOf = i => i % 9;
+  const inB = (r, f) => r >= 0 && r < 9 && f >= 0 && f < 9;
+  const other = s => s === 'B' ? 'W' : 'B';
+  const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+  function neighbors(i) {
+    const r = rowOf(i), f = colOf(i), out = [];
+    for (const [dr, df] of DIRS) if (inB(r + dr, f + df)) out.push(idx(r + dr, f + df));
+    return out;
+  }
+
+  // Nhom quan cung mau lien ke + tap khi (giao diem trong ke nhom).
+  function groupAt(b, i) {
+    const color = b[i];
+    const stones = [], libs = new Set(), seen = new Set([i]);
+    const stack = [i];
+    while (stack.length) {
+      const cur = stack.pop();
+      stones.push(cur);
+      for (const nb of neighbors(cur)) {
+        if (b[nb] === null) libs.add(nb);
+        else if (b[nb] === color && !seen.has(nb)) { seen.add(nb); stack.push(nb); }
+      }
+    }
+    return { stones, libs };
+  }
+
+  function initialState() {
+    return { b: new Array(SZ).fill(null), turn: 'B', ko: null,
+      passes: 0, cap: { B: 0, W: 0 }, over: false, moveCount: 0 };
+  }
+
+  function stateFrom(list, turn, extra) {
+    const b = new Array(SZ).fill(null);
+    for (const [p, f, r] of list) b[idx(r, f)] = p;
+    const e = extra || {};
+    return { b, turn: turn || 'B', ko: (e.ko === undefined ? null : e.ko),
+      passes: e.passes || 0, cap: { B: (e.capB || 0), W: (e.capW || 0) },
+      over: false, moveCount: e.moveCount || 0 };
+  }
+
+  // Thu dat quan tai p: {ok, captured[]} hoac {ok:false, reason}.
+  // reason: 'occupied' (da co quan), 'suicide' (tu sat), 'ko' (an lai ngay).
+  function tryPlay(st, p) {
+    if (st.b[p] !== null) return { ok: false, reason: 'occupied' };
+    const side = st.turn, foe = other(side);
+    const b = st.b.slice();
+    b[p] = side;
+    let captured = [];
+    for (const nb of neighbors(p)) {
+      if (b[nb] === foe) {
+        const g = groupAt(b, nb);
+        if (g.libs.size === 0) captured = captured.concat(g.stones);
+      }
+    }
+    if (captured.length > 0) {
+      if (p === st.ko && captured.length === 1) return { ok: false, reason: 'ko' };
+      return { ok: true, captured };
+    }
+    const g = groupAt(b, p);
+    if (g.libs.size === 0) return { ok: false, reason: 'suicide' };
+    return { ok: true, captured: [] };
+  }
+
+  // mv = {point} hoac {pass:true}. Tra state moi (khong sua state cu).
+  function applyMove(st, mv) {
+    const b = st.b.slice();
+    const cap = { B: st.cap.B, W: st.cap.W };
+    let ko = null, passes = st.passes;
+    if (mv.pass) {
+      passes = st.passes + 1;
+    } else {
+      const t = tryPlay(st, mv.point);
+      if (!t.ok) throw new Error('illegal move: ' + t.reason);
+      b[mv.point] = st.turn;
+      for (const c of t.captured) b[c] = null;
+      cap[st.turn] += t.captured.length;
+      ko = t.captured.length === 1 ? t.captured[0] : null;
+      passes = 0;
+    }
+    return { b, turn: other(st.turn), ko, passes, cap,
+      over: passes >= 2, moveCount: st.moveCount + 1 };
+  }
+
+  function legalMoves(st) {
+    const out = [];
+    for (let p = 0; p < SZ; p++) {
+      if (st.b[p] === null && tryPlay(st, p).ok) out.push(p);
+    }
+    return out;
+  }
+
+  // Tinh diem kieu Trung Quoc: quan tren ban + dat trong bao quanh.
+  // Vung trong chi tiep xuc 1 mau thi la dat cua mau do; tiep xuc ca 2
+  // mau thi trung lap (dame), khong tinh cho ai. Komi 7.5 cho Trang.
+  function score(st) {
+    let stonesB = 0, stonesW = 0;
+    for (let i = 0; i < SZ; i++) {
+      if (st.b[i] === 'B') stonesB++;
+      else if (st.b[i] === 'W') stonesW++;
+    }
+    const seen = new Set();
+    let terrB = 0, terrW = 0;
+    for (let i = 0; i < SZ; i++) {
+      if (st.b[i] !== null || seen.has(i)) continue;
+      const region = [], border = new Set(), stack = [i];
+      seen.add(i);
+      while (stack.length) {
+        const cur = stack.pop();
+        region.push(cur);
+        for (const nb of neighbors(cur)) {
+          if (st.b[nb] === null) {
+            if (!seen.has(nb)) { seen.add(nb); stack.push(nb); }
+          } else border.add(st.b[nb]);
+        }
+      }
+      if (border.size === 1) {
+        if (border.has('B')) terrB += region.length;
+        else terrW += region.length;
+      }
+    }
+    return { B: stonesB + terrB, W: stonesW + terrW + KOMI,
+      terrB, terrW, stonesB, stonesW };
+  }
+
+  // --- AI: cham diem tung nuoc (khong phai minimax day du — ban 9x9
+  // co 81 nuoc, cay tim kiem qua lon; dung heuristic + nhin truoc 1 nuoc). ---
+  const STAR = new Set([20, 24, 40, 56, 60]); // (2,2),(2,6),(4,4),(6,2),(6,6)
+  function posValue(p, moveCount) {
+    const r = rowOf(p), f = colOf(p);
+    let v = 0;
+    if (STAR.has(p)) v += 5;
+    const edgeDist = Math.min(r, 8 - r, f, 8 - f); // 0 = bien 1, 1 = duong 2, 2 = duong 3
+    if (edgeDist === 2) v += 3;
+    else if (edgeDist === 3) v += 1;
+    else if (edgeDist === 0) v -= 3;
+    if (moveCount < 12 && edgeDist >= 2) v += 1;
+    return v;
+  }
+
+  // Tat ca o ke trong ban deu la quan minh -> dien mat cua minh.
+  function isOwnEye(b, p, side) {
+    const nbs = neighbors(p);
+    if (nbs.length < 2) return false;
+    for (const nb of nbs) if (b[nb] !== side) return false;
+    return true;
+  }
+
+  function evalMove(st, p) {
+    const side = st.turn, foe = other(side);
+    const t = tryPlay(st, p);
+    if (!t.ok) return -Infinity;
+    const b = st.b.slice();
+    b[p] = side;
+    for (const c of t.captured) b[c] = null;
+    let s = t.captured.length * 10; // an quan: 10 diem/quan
+    // Cuu nhom sap chet: nhom minh ke ben chi con 1 khi (la p), sau khi
+    // di thi nhom co > 1 khi.
+    for (const nb of neighbors(p)) {
+      if (st.b[nb] === side) {
+        const gBefore = groupAt(st.b, nb);
+        if (gBefore.libs.size === 1 && gBefore.libs.has(p)) {
+          if (groupAt(b, p).libs.size > 1) s += 8;
+        }
+      }
+    }
+    // Dat nhom dich vao atari (chi con 1 khi).
+    for (const nb of neighbors(p)) {
+      if (b[nb] === foe && groupAt(b, nb).libs.size === 1) s += 4;
+    }
+    const gAfter = groupAt(b, p);
+    if (t.captured.length === 0 && gAfter.libs.size === 1) s -= 6; // tu dat vao atari
+    if (t.captured.length === 0 && isOwnEye(st.b, p, side)) s -= 8; // dien mat minh
+    s += posValue(p, st.moveCount);
+    return s;
+  }
+
+  function bestMove(st, difficulty) {
+    const legal = legalMoves(st);
+    if (!legal.length) return null;
+    if (difficulty === 1 && Math.random() < 0.35) {
+      const rp = legal[(Math.random() * legal.length) | 0];
+      return { point: rp, score: evalMove(st, rp) };
+    }
+    let best = null, bestScore = -Infinity;
+    for (const p of legal) {
+      let v = evalMove(st, p);
+      if (difficulty === 1) v += Math.random() * 6 - 3;
+      else if (difficulty === 2) v += Math.random() * 2 - 1;
+      if (difficulty === 3) {
+        // Nhin truoc 1 nuoc: doi thu an lai duoc bao nhieu sau nuoc nay?
+        const sim = applyMove(st, { point: p });
+        let foeBest = 0;
+        for (const q of legalMoves(sim)) {
+          const tq = tryPlay(sim, q);
+          if (tq.ok && tq.captured.length > foeBest) foeBest = tq.captured.length;
+        }
+        v -= foeBest * 6;
+      }
+      if (v > bestScore) { bestScore = v; best = p; }
+    }
+    return { point: best, score: bestScore };
+  }
+
+  // AI bo luot khi khong con nuoc nao dang di (chi con dame/dien mat).
+  function shouldPass(st, difficulty) {
+    const legal = legalMoves(st);
+    if (!legal.length) return true;
+    const bm = bestMove(st, difficulty);
+    if (!bm) return true;
+    const empty = st.b.filter(x => x === null).length;
+    if (bm.score <= 0.5 && empty <= 30) return true;
+    if (bm.score <= -2 && st.moveCount > 60) return true;
+    return false;
+  }
+
+  return { N, KOMI, idx, rowOf, colOf, other, neighbors, groupAt,
+    initialState, stateFrom, tryPlay, applyMove, legalMoves, score,
+    evalMove, bestMove, shouldPass, posValue };
+})();
+/* ENGINE-END */
+if (typeof window !== 'undefined') window.__go = GO;
+</script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const boardEl = $('board'), statusEl = $('status'), histEl = $('history'), bannerEl = $('banner');
+  const capBlackEl = $('capBlack'), capWhiteEl = $('capWhite'), scoreEstEl = $('scoreEst');
+
+  const FILES = 'ABCDEFGHJ'; // chu cai cot (bo qua I nhu co vay truyen thong)
+  const STAR = new Set([20, 24, 40, 56, 60]);
+
+  let st = GO.initialState();
+  let playerSide = 'B'; // nguoi choi cam Den, di truoc
+  let aiSide = 'W';
+  let difficulty = 2;
+  let history = []; // {mv, snap, text}
+  let moveError = null;
+  let gameOver = false;
+  let winner = null; // 'B' | 'W'
+  let finalScore = null;
+  let aiThinking = false;
+  let lastPoint = null;
+
+  const ptName = i => FILES[i % 9] + (9 - ((i / 9) | 0));
+  const sideName = s => s === 'B' ? 'Đen' : 'Trắng';
+  const moveText = mv => mv.pass ? 'bỏ lượt' : ptName(mv.point);
+
+  function snapshot() {
+    return { st: { b: st.b.slice(), turn: st.turn, ko: st.ko, passes: st.passes,
+      cap: { B: st.cap.B, W: st.cap.W }, over: st.over, moveCount: st.moveCount },
+      lastPoint, gameOver, winner, finalScore };
+  }
+  function restore(snap) {
+    st = snap.st; lastPoint = snap.lastPoint; gameOver = snap.gameOver;
+    winner = snap.winner; finalScore = snap.finalScore;
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    boardEl.className = 'turn-' + st.turn;
+    for (let d = 0; d < 81; d++) {
+      const r = (d / 9) | 0, f = d % 9;
+      const i = GO.idx(r, f);
+      const cell = document.createElement('div');
+      cell.className = 'pt' + (f === 0 ? ' f0' : '') + (f === 8 ? ' f8' : '')
+        + (r === 0 ? ' r0' : '') + (r === 8 ? ' r8' : '');
+      cell.dataset.pt = i;
+      if (STAR.has(i)) {
+        const h = document.createElement('span');
+        h.className = 'hoshi';
+        cell.appendChild(h);
+      }
+      const p = st.b[i];
+      if (p) {
+        const s = document.createElement('span');
+        s.className = 'stone ' + p + (lastPoint === i ? ' last' : '');
+        cell.appendChild(s);
+      } else {
+        const g = document.createElement('span');
+        g.className = 'ghost';
+        cell.appendChild(g);
+      }
+      if (f === 0) {
+        const c = document.createElement('span');
+        c.className = 'coord r'; c.textContent = 9 - r;
+        cell.appendChild(c);
+      }
+      if (r === 8) {
+        const c = document.createElement('span');
+        c.className = 'coord f'; c.textContent = FILES[f];
+        cell.appendChild(c);
+      }
+      boardEl.appendChild(cell);
+    }
+    capBlackEl.textContent = 'Đen ăn: ' + (st.cap.B ? st.cap.B + ' quân' : '—');
+    capWhiteEl.textContent = 'Trắng ăn: ' + (st.cap.W ? st.cap.W + ' quân' : '—');
+    const sc = GO.score(st);
+    scoreEstEl.textContent = 'Điểm ước lượng: Đen ' + sc.B + ' – Trắng ' + sc.W;
+    histEl.innerHTML = '';
+    history.forEach((h, i) => {
+      const li = document.createElement('li');
+      li.textContent = (Math.floor(i / 2) + 1) + (i % 2 === 0 ? '. ' : '… ')
+        + (i % 2 === 0 ? 'Đen ' : 'Trắng ') + h.text;
+      histEl.appendChild(li);
+    });
+    if (histEl.lastChild) histEl.scrollTop = histEl.scrollHeight; // chi cuon trong danh sach lich su, khong cuon ca trang
+    statusEl.className = '';
+    if (gameOver) {
+      statusEl.textContent = winner === playerSide ? 'Bạn thắng!' : 'AI thắng!';
+    } else if (moveError) {
+      statusEl.textContent = moveError;
+      statusEl.className = 'check';
+    } else if (aiThinking) {
+      statusEl.textContent = 'AI đang nghĩ…';
+      statusEl.className = 'think';
+    } else {
+      statusEl.textContent = 'Lượt của ' + (st.turn === playerSide ? 'bạn' : 'AI') + ' (' + sideName(st.turn) + ').';
+    }
+    if (gameOver && finalScore) {
+      bannerEl.style.display = 'block';
+      bannerEl.className = winner === playerSide ? '' : 'lose';
+      bannerEl.id = 'banner';
+      bannerEl.textContent = (winner === playerSide ? 'Bạn thắng! ' : 'AI thắng! ')
+        + 'Đen ' + finalScore.B + ' – Trắng ' + finalScore.W + '.';
+    } else {
+      bannerEl.style.display = 'none';
+    }
+  }
+
+  function finishGame() {
+    finalScore = GO.score(st);
+    gameOver = true;
+    winner = finalScore.B > finalScore.W ? 'B' : 'W';
+    render();
+  }
+
+  function doMove(mv) {
+    const snap = snapshot();
+    const text = moveText(mv);
+    st = GO.applyMove(st, mv);
+    lastPoint = mv.pass ? null : mv.point;
+    moveError = null;
+    history.push({ mv, snap, text });
+    render();
+    if (st.over) { finishGame(); return; }
+    if (st.turn === aiSide) scheduleAi();
+  }
+
+  function scheduleAi() {
+    aiThinking = true;
+    render();
+    setTimeout(() => {
+      aiThinking = false;
+      if (gameOver) { render(); return; }
+      if (GO.shouldPass(st, difficulty)) { doMove({ pass: true }); return; }
+      const bm = GO.bestMove(st, difficulty);
+      if (!bm) { doMove({ pass: true }); return; }
+      doMove({ point: bm.point });
+    }, 450);
+  }
+
+  const ERR_TEXT = {
+    occupied: 'Đi lỗi! Chỗ này đã có quân — thử giao điểm khác.',
+    suicide: 'Đi lỗi! Nước tự sát (quân đặt xuống hết khí mà không ăn được quân địch).',
+    ko: 'Đi lỗi! Luật Ko — không được ăn lại ngay 1 quân vừa bị ăn, đi chỗ khác trước đã.'
+  };
+
+  function onPoint(i) {
+    if (gameOver || aiThinking || st.turn !== playerSide) return;
+    const t = GO.tryPlay(st, i);
+    if (!t.ok) {
+      moveError = ERR_TEXT[t.reason] || 'Đi lỗi! Nước này không hợp lệ — thử nước khác.';
+      render();
+      return;
+    }
+    moveError = null;
+    doMove({ point: i });
+  }
+
+  boardEl.addEventListener('click', e => {
+    const cell = e.target.closest('.pt');
+    if (!cell) return;
+    onPoint(parseInt(cell.dataset.pt, 10));
+  });
+
+  function newGame() {
+    st = GO.initialState();
+    difficulty = parseInt($('diff').value, 10);
+    history = []; moveError = null;
+    gameOver = false; winner = null; finalScore = null; aiThinking = false; lastPoint = null;
+    render();
+  }
+
+  $('newBtn').addEventListener('click', newGame);
+  $('diff').addEventListener('change', () => { difficulty = parseInt($('diff').value, 10); });
+  $('passBtn').addEventListener('click', () => {
+    if (gameOver || aiThinking || st.turn !== playerSide) return;
+    moveError = null;
+    doMove({ pass: true });
+  });
+  $('resignBtn').addEventListener('click', () => {
+    if (gameOver || aiThinking) return;
+    finalScore = GO.score(st);
+    gameOver = true;
+    winner = aiSide;
+    render();
+  });
+  $('undoBtn').addEventListener('click', () => {
+    if (history.length === 0 || aiThinking) return;
+    const undoOne = () => {
+      const h = history.pop();
+      if (h) restore(h.snap);
+    };
+    undoOne();
+    if (st.turn === aiSide && history.length > 0) undoOne();
+    gameOver = false; winner = null; finalScore = null; moveError = null;
+    render();
+  });
+
+  // Debug / test hook: set a custom position. pieces = [[char, file, rankIdx], ...], side = side to move.
+  window.__go.setPosition = function (pieces, side, extra) {
+    st = GO.stateFrom(pieces, side, extra);
+    history = []; moveError = null;
+    gameOver = false; winner = null; finalScore = null; aiThinking = false; lastPoint = null;
+    render();
+    if (st.over) finishGame();
+  };
+  window.__go.getState = function () {
+    return { turn: st.turn, historyLen: history.length, gameOver, winner,
+      board: st.b.slice(), legalCount: gameOver ? 0 : GO.legalMoves(st).length,
+      score: GO.score(st), passes: st.passes };
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
