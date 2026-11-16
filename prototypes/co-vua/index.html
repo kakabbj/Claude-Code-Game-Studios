@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cờ Vua — Chơi với AI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; background: #2b2118; color: #f2e8d5; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 28px; margin: 4px 0 2px; color: #ffd97a; }
+  .sub { text-align: center; color: #d8c9a8; margin-bottom: 12px; font-size: 14px; }
+  .main { display: flex; gap: 16px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  #boardWrap { position: relative; flex: none; }
+  #board { position: sticky; top: 12px; width: min(92vw, 520px); aspect-ratio: 1; display: grid;
+    grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+    border: 4px solid #7a4a21; border-radius: 4px; overflow: hidden; }
+  .sq { position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; }
+  .sq.light { background: #f0d9b5; }
+  .sq.dark { background: #b58863; }
+  .sq.sel { outline: 3px solid #ffd700; outline-offset: -3px; z-index: 2; }
+  .sq.last { box-shadow: inset 0 0 0 100px rgba(255, 215, 0, .35); }
+  .sq .pc { font-size: clamp(24px, 6vw, 44px); line-height: 1; pointer-events: none; }
+  .sq .pc.wp { color: #fafafa; text-shadow: 0 0 2px #000, 0 2px 3px rgba(0,0,0,.7); }
+  .sq .pc.bp { color: #1a1a1a; text-shadow: 0 0 3px rgba(255,255,255,.85), 0 2px 3px rgba(0,0,0,.4); }
+  .sq .coord { position: absolute; font-size: 10px; font-weight: 700; pointer-events: none; }
+  .sq .coord.f { left: 2px; bottom: 1px; }
+  .sq .coord.r { right: 2px; top: 1px; }
+  .sq.light .coord { color: #b58863; }
+  .sq.dark .coord { color: #f0d9b5; }
+  #promo { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.55); z-index: 5; }
+  #promo.show { display: flex; }
+  #promo .box { background: #3a2d1e; border: 2px solid #ffd97a; border-radius: 10px; padding: 16px; text-align: center; }
+  #promo .box p { margin-bottom: 10px; font-weight: 700; color: #ffd97a; }
+  #promo button { font-size: 34px; padding: 6px 12px; margin: 0 4px; border-radius: 8px; border: 1px solid #8a6d3b;
+    background: #f7ead0; color: #2b2118; cursor: pointer; }
+  .panel { width: min(92vw, 320px); background: #3a2d1e; border: 1px solid #6b5233; border-radius: 8px; padding: 14px; }
+  .panel h2 { font-size: 17px; margin-bottom: 8px; color: #ffd97a; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+  label { font-size: 14px; }
+  select, button { font-size: 14px; padding: 7px 10px; border-radius: 6px; border: 1px solid #8a6d3b; background: #f7ead0; color: #2b2118; cursor: pointer; }
+  button.primary { background: #c0392b; color: #fff; border-color: #c0392b; font-weight: 700; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { font-size: 16px; font-weight: 700; min-height: 24px; margin: 4px 0; }
+  #status.check { color: #ff6b5e; }
+  #status.think { color: #7ec8ff; }
+  #history { list-style: none; max-height: 240px; overflow-y: auto; background: #241a10; border-radius: 6px; padding: 8px 10px; font-size: 14px; line-height: 1.7; }
+  #history li:nth-child(odd) { background: rgba(255,255,255,.04); }
+  .cap { font-size: 14px; line-height: 1.7; margin-top: 8px; }
+  .legend { font-size: 13px; color: #d8c9a8; margin-top: 10px; line-height: 1.7; }
+  #banner { display: none; margin-top: 10px; padding: 12px; border-radius: 8px; background: #14532d; color: #fff; font-size: 17px; font-weight: 700; text-align: center; }
+  #banner.lose { background: #7f1d1d; }
+  #banner.draw { background: #57534e; }
+  .rules { max-width: 1020px; margin: 14px auto 0; background: #3a2d1e; border: 1px solid #6b5233; border-radius: 8px; padding: 14px 18px; font-size: 14px; line-height: 1.8; }
+  .rules h2 { color: #ffd97a; font-size: 17px; margin-bottom: 6px; }
+  @media (max-width: 700px) { h1 { font-size: 22px; } .panel { width: min(94vw, 540px); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Cờ Vua</h1>
+  <p class="sub">Chơi với máy (AI) — không cần mạng, không cần key, AI chạy ngay trong trình duyệt.</p>
+  <div class="main">
+    <div id="boardWrap">
+      <div id="board" aria-label="Bàn cờ vua"></div>
+      <div id="promo">
+        <div class="box">
+          <p>Phong cấp thành:</p>
+          <div id="promoBtns"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Ván cờ</h2>
+      <div class="row">
+        <label>Độ khó:
+          <select id="diff">
+            <option value="1">Dễ</option>
+            <option value="2" selected>Vừa</option>
+            <option value="3">Khó</option>
+          </select>
+        </label>
+        <label>Bạn chơi:
+          <select id="side">
+            <option value="w" selected>Trắng (đi trước)</option>
+            <option value="b">Đen</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <button id="newBtn" class="primary">Ván mới</button>
+        <button id="undoBtn">Hoàn tác</button>
+      </div>
+      <div id="status">Lượt của bạn (Trắng).</div>
+      <div class="cap" id="capWhite">Trắng ăn: —</div>
+      <div class="cap" id="capBlack">Đen ăn: —</div>
+      <h2 style="margin-top:12px">Nước đi</h2>
+      <ol id="history"></ol>
+      <p class="legend">Quân Trắng: ♔ Vua, ♕ Hậu, ♖ Xe, ♗ Tượng, ♘ Mã, ♙ Tốt &nbsp;—&nbsp; Quân Đen: ♚ ♛ ♜ ♝ ♞ ♟.<br>
+      Bấm vào 1 quân của bạn rồi bấm vào ô đích để đi (không hiện sẵn các nước đi được). Đi sai luật sẽ báo “Đi lỗi” và không cho đi.</p>
+      <div id="banner"></div>
+    </div>
+  </div>
+  <div class="rules">
+    <h2>Luật chơi (tóm tắt)</h2>
+    <p>Trắng đi trước. <b>Vua</b> đi 1 ô mọi hướng; <b>Hậu</b> đi dọc/ngang/chéo bao xa cũng được; <b>Xe</b> đi dọc/ngang; <b>Tượng</b> đi chéo; <b>Mã</b> đi hình chữ L (2+1, nhảy qua quân khác); <b>Tốt</b> đi thẳng 1 ô (được đi 2 ô ở nước đầu), ăn chéo 1 ô, có bắt tốt qua đường và phong cấp khi tới cuối bàn.
+    <b>Nhập thành</b> khi Vua và Xe chưa đi, giữa không có quân, Vua không đang bị chiếu và không đi qua ô bị chiếu. Chiếu hết thì thắng; bí nước (không còn nước đi hợp lệ mà không bị chiếu) thì hòa. Hòa khi 50 nước không ăn quân/không đi Tốt, hoặc khi không còn đủ quân để chiếu hết.</p>
+  </div>
+</div>
+<script>
+/* ENGINE-START */
+const CV = (() => {
+  const VAL = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 0 };
+  const NAME = { K: 'Vua', Q: 'Hậu', R: 'Xe', B: 'Tượng', N: 'Mã', P: 'Tốt' };
+  const GLYPH = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  const MATE = 100000;
+  // Bang vi tri don gian (goc nhin Trang, hang 8 o tren). Quan Den soi guong doc.
+  const PST = {
+    P: [0,0,0,0,0,0,0,0, 50,50,50,50,50,50,50,50, 10,10,20,30,30,20,10,10, 5,5,10,25,25,10,5,5, 0,0,0,20,20,0,0,0, 5,-5,-10,0,0,-10,-5,5, 5,10,10,-20,-20,10,10,5, 0,0,0,0,0,0,0,0],
+    N: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+    B: [-20,-10,-10,-10,-10,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,10,10,5,0,-10, -10,5,5,10,10,5,5,-10, -10,0,10,10,10,10,0,-10, -10,10,10,10,10,10,10,-10, -10,5,0,0,0,0,5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+    R: [0,0,0,0,0,0,0,0, 5,10,10,10,10,10,10,5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, 0,0,0,5,5,0,0,0],
+    Q: [-20,-10,-10,-5,-5,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,5,5,5,0,-10, -5,0,5,5,5,5,0,-5, 0,0,5,5,5,5,0,-5, -10,5,5,5,5,5,0,-10, -10,0,5,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+    K: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10, 20,20,0,0,0,0,20,20, 20,30,10,0,0,10,30,20]
+  };
+
+  const idx = (r, f) => r * 8 + f;
+  const inB = (r, f) => r >= 0 && r < 8 && f >= 0 && f < 8;
+  const sideOf = p => p ? (p === p.toUpperCase() ? 'w' : 'b') : null;
+  const other = s => s === 'w' ? 'b' : 'w';
+  const rankOf = i => (i / 8) | 0, fileOf = i => i % 8;
+
+  function initialState() {
+    const b = new Array(64).fill(null);
+    const back = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
+    for (let f = 0; f < 8; f++) {
+      b[idx(0, f)] = back[f].toLowerCase();
+      b[idx(1, f)] = 'p';
+      b[idx(6, f)] = 'P';
+      b[idx(7, f)] = back[f];
+    }
+    return { b, turn: 'w', castling: { K: true, Q: true, k: true, q: true }, ep: null, half: 0 };
+  }
+
+  function stateFrom(list, turn, castling, ep, half) {
+    const b = new Array(64).fill(null);
+    for (const [p, f, r] of list) b[idx(r, f)] = p;
+    return { b, turn: turn || 'w',
+      castling: castling || { K: false, Q: false, k: false, q: false },
+      ep: (ep === undefined || ep === null) ? null : ep, half: half || 0 };
+  }
+
+  const KNIGHT_D = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+  const KING_D = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  const ROOK_D = [[-1,0],[1,0],[0,-1],[0,1]];
+  const BISHOP_D = [[-1,-1],[-1,1],[1,-1],[1,1]];
+
+  function isAttacked(st, sq, by) {
+    const r = rankOf(sq), f = fileOf(sq);
+    const P = by === 'w' ? 'P' : 'p', N = by === 'w' ? 'N' : 'n',
+      B = by === 'w' ? 'B' : 'b', R = by === 'w' ? 'R' : 'r',
+      Q = by === 'w' ? 'Q' : 'q', K = by === 'w' ? 'K' : 'k';
+    const pr = by === 'w' ? r + 1 : r - 1; // Tot Trang tan cong tu hang duoi, Tot Den tu hang tren
+    for (const df of [-1, 1]) {
+      if (inB(pr, f + df) && st.b[idx(pr, f + df)] === P) return true;
+    }
+    for (const [dr, df] of KNIGHT_D) {
+      if (inB(r + dr, f + df) && st.b[idx(r + dr, f + df)] === N) return true;
+    }
+    for (const [dr, df] of KING_D) {
+      if (inB(r + dr, f + df) && st.b[idx(r + dr, f + df)] === K) return true;
+    }
+    for (const [dr, df] of ROOK_D) {
+      let rr = r + dr, ff = f + df;
+      while (inB(rr, ff)) {
+        const p = st.b[idx(rr, ff)];
+        if (p) { if (p === R || p === Q) return true; break; }
+        rr += dr; ff += df;
+      }
+    }
+    for (const [dr, df] of BISHOP_D) {
+      let rr = r + dr, ff = f + df;
+      while (inB(rr, ff)) {
+        const p = st.b[idx(rr, ff)];
+        if (p) { if (p === B || p === Q) return true; break; }
+        rr += dr; ff += df;
+      }
+    }
+    return false;
+  }
+
+  function findKing(st, side) {
+    const k = side === 'w' ? 'K' : 'k';
+    for (let i = 0; i < 64; i++) if (st.b[i] === k) return i;
+    return -1;
+  }
+
+  function isCheck(st, side) {
+    const k = findKing(st, side);
+    return k >= 0 && isAttacked(st, k, other(side));
+  }
+
+  function pseudoMoves(st) {
+    const moves = [];
+    const side = st.turn;
+    const dir = side === 'w' ? -1 : 1; // Trang di ve hang giam dan
+    const startRank = side === 'w' ? 6 : 1;
+    const promoRank = side === 'w' ? 0 : 7;
+    const them = other(side);
+    for (let i = 0; i < 64; i++) {
+      const p = st.b[i];
+      if (!p || sideOf(p) !== side) continue;
+      const r = rankOf(i), f = fileOf(i);
+      const type = p.toUpperCase();
+      const push = (to, opt) => moves.push(Object.assign(
+        { from: i, to, piece: p, captured: null, promo: null, castle: null, ep: false, double: false }, opt || {}));
+      if (type === 'P') {
+        const r1 = r + dir;
+        if (inB(r1, f) && !st.b[idx(r1, f)]) {
+          if (r1 === promoRank) {
+            for (const pr of ['Q', 'R', 'B', 'N'])
+              push(idx(r1, f), { promo: side === 'w' ? pr : pr.toLowerCase() });
+          } else {
+            push(idx(r1, f));
+            const r2 = r + 2 * dir;
+            if (r === startRank && !st.b[idx(r2, f)]) push(idx(r2, f), { double: true });
+          }
+        }
+        for (const df of [-1, 1]) {
+          const cf = f + df;
+          if (!inB(r1, cf)) continue;
+          const t = idx(r1, cf), tp = st.b[t];
+          if (tp && sideOf(tp) === them) {
+            if (r1 === promoRank) {
+              for (const pr of ['Q', 'R', 'B', 'N'])
+                push(t, { captured: tp, promo: side === 'w' ? pr : pr.toLowerCase() });
+            } else push(t, { captured: tp });
+          } else if (t === st.ep && !tp) {
+            push(t, { captured: them === 'w' ? 'P' : 'p', ep: true });
+          }
+        }
+      } else if (type === 'N' || type === 'K') {
+        const dirs = type === 'N' ? KNIGHT_D : KING_D;
+        for (const [dr, df] of dirs) {
+          if (!inB(r + dr, f + df)) continue;
+          const t = idx(r + dr, f + df), tp = st.b[t];
+          if (!tp) push(t);
+          else if (sideOf(tp) === them) push(t, { captured: tp });
+        }
+        if (type === 'K') {
+          if (side === 'w' && i === 60) {
+            if (st.castling.K && !st.b[61] && !st.b[62] && st.b[63] === 'R'
+              && !isAttacked(st, 60, 'b') && !isAttacked(st, 61, 'b') && !isAttacked(st, 62, 'b'))
+              push(62, { castle: 'K' });
+            if (st.castling.Q && !st.b[59] && !st.b[58] && !st.b[57] && st.b[56] === 'R'
+              && !isAttacked(st, 60, 'b') && !isAttacked(st, 59, 'b') && !isAttacked(st, 58, 'b'))
+              push(58, { castle: 'Q' });
+          }
+          if (side === 'b' && i === 4) {
+            if (st.castling.k && !st.b[5] && !st.b[6] && st.b[7] === 'r'
+              && !isAttacked(st, 4, 'w') && !isAttacked(st, 5, 'w') && !isAttacked(st, 6, 'w'))
+              push(6, { castle: 'k' });
+            if (st.castling.q && !st.b[3] && !st.b[2] && !st.b[1] && st.b[0] === 'r'
+              && !isAttacked(st, 4, 'w') && !isAttacked(st, 3, 'w') && !isAttacked(st, 2, 'w'))
+              push(2, { castle: 'q' });
+          }
+        }
+      } else {
+        const dirs = type === 'B' ? BISHOP_D : type === 'R' ? ROOK_D : BISHOP_D.concat(ROOK_D);
+        for (const [dr, df] of dirs) {
+          let rr = r + dr, ff = f + df;
+          while (inB(rr, ff)) {
+            const t = idx(rr, ff), tp = st.b[t];
+            if (!tp) push(t);
+            else { if (sideOf(tp) === them) push(t, { captured: tp }); break; }
+            rr += dr; ff += df;
+          }
+        }
+      }
+    }
+    return moves;
+  }
+
+  function applyMove(st, mv) {
+    const b = st.b.slice();
+    const castling = Object.assign({}, st.castling);
+    const side = st.turn;
+    const piece = b[mv.from];
+    b[mv.from] = null;
+    if (mv.ep) b[mv.to + (side === 'w' ? 8 : -8)] = null; // lay Tot bi bat qua duong
+    b[mv.to] = mv.promo || piece;
+    if (mv.castle === 'K') { b[63] = null; b[61] = 'R'; }
+    if (mv.castle === 'Q') { b[56] = null; b[59] = 'R'; }
+    if (mv.castle === 'k') { b[7] = null; b[5] = 'r'; }
+    if (mv.castle === 'q') { b[0] = null; b[3] = 'r'; }
+    if (piece === 'K') { castling.K = false; castling.Q = false; }
+    if (piece === 'k') { castling.k = false; castling.q = false; }
+    if (mv.from === 63 || mv.to === 63) castling.K = false;
+    if (mv.from === 56 || mv.to === 56) castling.Q = false;
+    if (mv.from === 7 || mv.to === 7) castling.k = false;
+    if (mv.from === 0 || mv.to === 0) castling.q = false;
+    const ep = mv.double ? mv.from + (side === 'w' ? -8 : 8) : null;
+    const half = (piece.toUpperCase() === 'P' || mv.captured) ? 0 : st.half + 1;
+    return { b, turn: other(side), castling, ep, half };
+  }
+
+  function legalMoves(st) {
+    const side = st.turn;
+    return pseudoMoves(st).filter(mv => !isCheck(applyMove(st, mv), side));
+  }
+
+  function evaluate(st) {
+    let score = 0;
+    for (let i = 0; i < 64; i++) {
+      const p = st.b[i];
+      if (!p) continue;
+      const type = p.toUpperCase();
+      const r = rankOf(i), f = fileOf(i);
+      const pstIdx = p === p.toUpperCase() ? i : (7 - r) * 8 + f;
+      const v = VAL[type] + PST[type][pstIdx];
+      if (p === p.toUpperCase()) score += v; else score -= v;
+    }
+    return st.turn === 'w' ? score : -score;
+  }
+
+  function orderMoves(moves) {
+    return moves.sort((a, b) =>
+      (b.captured ? VAL[b.captured.toUpperCase()] : 0) - (a.captured ? VAL[a.captured.toUpperCase()] : 0));
+  }
+
+  function negamax(st, depth, alpha, beta, ply) {
+    if (depth === 0) return evaluate(st);
+    const moves = orderMoves(legalMoves(st));
+    if (moves.length === 0) return isCheck(st, st.turn) ? -MATE + ply : 0;
+    let best = -Infinity;
+    for (const mv of moves) {
+      const s = -negamax(applyMove(st, mv), depth - 1, -beta, -alpha, ply + 1);
+      if (s > best) best = s;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  function bestMove(st, depth, random) {
+    const moves = legalMoves(st);
+    if (!moves.length) return null;
+    if (random && Math.random() < 0.35) return moves[(Math.random() * moves.length) | 0];
+    let best = null, bestScore = -Infinity, alpha = -Infinity;
+    for (const mv of orderMoves(moves)) {
+      const s = -negamax(applyMove(st, mv), depth - 1, -Infinity, -alpha, 1);
+      if (s > bestScore) { bestScore = s; best = mv; }
+      if (s > alpha) alpha = s;
+    }
+    return best;
+  }
+
+  function perft(st, depth) {
+    if (depth === 0) return 1;
+    let n = 0;
+    for (const mv of legalMoves(st)) n += perft(applyMove(st, mv), depth - 1);
+    return n;
+  }
+
+  function insufficientMaterial(st) {
+    const minors = [];
+    for (let i = 0; i < 64; i++) {
+      const p = st.b[i];
+      if (!p || p.toUpperCase() === 'K') continue;
+      if (p.toUpperCase() === 'B' || p.toUpperCase() === 'N') minors.push(p);
+      else return false;
+    }
+    return minors.length <= 1;
+  }
+
+  return { VAL, NAME, GLYPH, idx, inB, sideOf, other, rankOf, fileOf,
+    initialState, stateFrom, isAttacked, findKing, isCheck,
+    pseudoMoves, applyMove, makeMove: applyMove, legalMoves,
+    evaluate, bestMove, perft, insufficientMaterial };
+})();
+/* ENGINE-END */
+if (typeof window !== 'undefined') window.__cv = CV;
+</script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const boardEl = $('board'), statusEl = $('status'), histEl = $('history'), bannerEl = $('banner');
+  const capWhiteEl = $('capWhite'), capBlackEl = $('capBlack');
+  const promoEl = $('promo'), promoBtnsEl = $('promoBtns');
+
+  let st = CV.initialState();
+  let playerSide = 'w';
+  let aiSide = 'b';
+  let difficulty = 2;
+  let history = []; // {mv, snap, text}
+  let selected = null; // square index
+  let dests = []; // chi de kiem tra nuoc di hop le, KHONG hien len ban
+  let moveError = null; // thong bao "Di loi" khi nguoi choi di sai
+  let gameOver = false;
+  let winner = null; // 'w' | 'b' | 'draw'
+  let aiThinking = false;
+  let lastMove = null;
+  let pendingPromo = null; // {from, to} khi Tot toi cuoi ban, cho chon quan phong cap
+
+  const sqName = i => 'abcdefgh'[i % 8] + (8 - ((i / 8) | 0));
+  const sideName = s => s === 'w' ? 'Trắng' : 'Đen';
+  const moveText = mv => {
+    if (mv.castle === 'K' || mv.castle === 'k') return 'Nhập thành ngắn';
+    if (mv.castle === 'Q' || mv.castle === 'q') return 'Nhập thành dài';
+    const p = mv.piece;
+    const name = p ? CV.NAME[p.toUpperCase()] : '?';
+    let t = name + ' ' + sqName(mv.from) + '→' + sqName(mv.to);
+    if (mv.captured) t += ' (ăn ' + CV.NAME[mv.captured.toUpperCase()] + ')';
+    if (mv.promo) t += ' = ' + CV.NAME[mv.promo.toUpperCase()];
+    if (mv.ep) t += ' (bắt tốt qua đường)';
+    return t;
+  };
+
+  function snapshot() {
+    return { st: { b: st.b.slice(), turn: st.turn, castling: Object.assign({}, st.castling), ep: st.ep, half: st.half },
+      lastMove, gameOver, winner };
+  }
+  function restore(snap) {
+    st = snap.st; lastMove = snap.lastMove; gameOver = snap.gameOver; winner = snap.winner;
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    const flip = playerSide === 'b';
+    for (let d = 0; d < 64; d++) {
+      const dr = (d / 8) | 0, df = d % 8;
+      const r = flip ? 7 - dr : dr, f = flip ? 7 - df : df;
+      const i = CV.idx(r, f);
+      const sq = document.createElement('div');
+      sq.className = 'sq ' + ((r + f) % 2 === 0 ? 'light' : 'dark');
+      if (selected === i) sq.classList.add('sel');
+      if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add('last');
+      sq.dataset.sq = i;
+      const p = st.b[i];
+      if (p) {
+        const s = document.createElement('span');
+        s.className = 'pc ' + (CV.sideOf(p) === 'w' ? 'wp' : 'bp');
+        s.textContent = CV.GLYPH[p];
+        s.title = CV.NAME[p.toUpperCase()];
+        sq.appendChild(s);
+      }
+      if (df === 0) {
+        const c = document.createElement('span');
+        c.className = 'coord r'; c.textContent = 8 - r;
+        sq.appendChild(c);
+      }
+      if (dr === 7) {
+        const c = document.createElement('span');
+        c.className = 'coord f'; c.textContent = 'abcdefgh'[f];
+        sq.appendChild(c);
+      }
+      boardEl.appendChild(sq);
+    }
+    // captured pieces
+    const capW = [], capB = [];
+    for (const h of history) {
+      if (!h.mv.captured) continue;
+      if (h.snap.st.turn === 'w') capW.push(h.mv.captured);
+      else capB.push(h.mv.captured);
+    }
+    const glyphs = list => list.length ? list.map(p => CV.GLYPH[p]).join(' ') + ' (' + list.length + ')' : '—';
+    capWhiteEl.textContent = 'Trắng ăn: ' + glyphs(capW);
+    capBlackEl.textContent = 'Đen ăn: ' + glyphs(capB);
+    // history
+    histEl.innerHTML = '';
+    history.forEach((h, i) => {
+      const li = document.createElement('li');
+      li.textContent = (Math.floor(i / 2) + 1) + (i % 2 === 0 ? '. ' : '… ') + h.text;
+      histEl.appendChild(li);
+    });
+    if (histEl.lastChild) histEl.scrollTop = histEl.scrollHeight; // chi cuon trong danh sach lich su, khong cuon ca trang
+    // status
+    statusEl.className = '';
+    if (gameOver) {
+      if (winner === 'draw') statusEl.textContent = 'Hòa!';
+      else statusEl.textContent = (winner === playerSide ? 'Bạn thắng!' : 'AI thắng!') + ' — ' + sideName(winner) + ' thắng.';
+    } else if (moveError) {
+      statusEl.textContent = moveError;
+      statusEl.className = 'check';
+    } else if (aiThinking) {
+      statusEl.textContent = 'AI đang nghĩ…';
+      statusEl.className = 'think';
+    } else if (CV.isCheck(st, st.turn)) {
+      statusEl.textContent = 'Chiếu! Lượt của ' + (st.turn === playerSide ? 'bạn' : 'AI') + ' (' + sideName(st.turn) + ').';
+      statusEl.className = 'check';
+    } else {
+      statusEl.textContent = 'Lượt của ' + (st.turn === playerSide ? 'bạn' : 'AI') + ' (' + sideName(st.turn) + ').';
+    }
+    // banner
+    if (gameOver) {
+      bannerEl.style.display = 'block';
+      bannerEl.className = winner === 'draw' ? 'draw' : (winner === playerSide ? '' : 'lose');
+      bannerEl.id = 'banner';
+      if (winner === 'draw') bannerEl.textContent = 'Hòa! Chơi lại một ván nữa nhé.';
+      else if (winner === playerSide) bannerEl.textContent = 'Bạn thắng! Chơi lại một ván nữa nhé.';
+      else bannerEl.textContent = 'AI thắng! Bấm “Ván mới” để phục thù.';
+    } else {
+      bannerEl.style.display = 'none';
+    }
+  }
+
+  function endCheck() {
+    const legal = CV.legalMoves(st);
+    if (legal.length === 0) {
+      gameOver = true;
+      winner = CV.isCheck(st, st.turn) ? CV.other(st.turn) : 'draw';
+      render();
+      return true;
+    }
+    if (st.half >= 100 || CV.insufficientMaterial(st)) {
+      gameOver = true;
+      winner = 'draw';
+      render();
+      return true;
+    }
+    return false;
+  }
+
+  function doMove(mv) {
+    const snap = snapshot();
+    const text = moveText(mv);
+    st = CV.applyMove(st, mv);
+    lastMove = mv;
+    selected = null; dests = []; moveError = null; pendingPromo = null;
+    promoEl.classList.remove('show');
+    history.push({ mv, snap, text });
+    render();
+    if (endCheck()) return;
+    if (st.turn === aiSide) scheduleAi();
+  }
+
+  function scheduleAi() {
+    aiThinking = true;
+    render();
+    setTimeout(() => {
+      aiThinking = false;
+      if (gameOver) { render(); return; }
+      const mv = CV.bestMove(st, difficulty, difficulty === 1);
+      if (!mv) { endCheck(); return; }
+      doMove(mv);
+    }, 450);
+  }
+
+  function onSquare(i) {
+    if (gameOver || aiThinking || st.turn !== playerSide || pendingPromo) return;
+    const p = st.b[i];
+    if (selected !== null) {
+      const cands = dests.filter(d => d.to === i);
+      if (cands.length) {
+        const promoCands = cands.filter(d => d.promo);
+        if (promoCands.length) {
+          pendingPromo = { from: selected, to: i };
+          showPromo();
+          return;
+        }
+        moveError = null;
+        doMove(cands[0]);
+        return;
+      }
+      if (p && CV.sideOf(p) === playerSide) {
+        // bam sang quan khac cua minh: doi lua chon, khong bao loi
+        moveError = null;
+        selected = i;
+        dests = CV.legalMoves(st).filter(m => m.from === i);
+        render();
+        return;
+      }
+      // da chon quan roi ma bam o khong di duoc: bao loi, KHONG cho di, giu nguyen lua chon
+      moveError = 'Đi lỗi! Nước này không hợp lệ — thử nước khác.';
+      render();
+      return;
+    }
+    if (p && CV.sideOf(p) === playerSide) {
+      moveError = null;
+      selected = i;
+      dests = CV.legalMoves(st).filter(m => m.from === i);
+      render();
+    }
+    // chua chon quan ma bam o trong: khong lam gi
+  }
+
+  function showPromo() {
+    promoBtnsEl.innerHTML = '';
+    const promos = playerSide === 'w' ? ['Q', 'R', 'B', 'N'] : ['q', 'r', 'b', 'n'];
+    for (const pr of promos) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = CV.GLYPH[pr];
+      b.title = CV.NAME[pr.toUpperCase()];
+      b.addEventListener('click', () => {
+        const mv = dests.find(d => d.to === pendingPromo.to && d.promo === pr);
+        if (mv) { moveError = null; doMove(mv); }
+        else { pendingPromo = null; promoEl.classList.remove('show'); render(); }
+      });
+      promoBtnsEl.appendChild(b);
+    }
+    promoEl.classList.add('show');
+  }
+
+  boardEl.addEventListener('click', e => {
+    const sq = e.target.closest('.sq');
+    if (!sq) return;
+    onSquare(parseInt(sq.dataset.sq, 10));
+  });
+
+  function newGame() {
+    st = CV.initialState();
+    playerSide = $('side').value;
+    aiSide = CV.other(playerSide);
+    difficulty = parseInt($('diff').value, 10);
+    history = []; selected = null; dests = []; moveError = null;
+    gameOver = false; winner = null; aiThinking = false; lastMove = null; pendingPromo = null;
+    promoEl.classList.remove('show');
+    render();
+    if (st.turn === aiSide) scheduleAi();
+  }
+
+  $('newBtn').addEventListener('click', newGame);
+  $('diff').addEventListener('change', () => { difficulty = parseInt($('diff').value, 10); });
+  $('side').addEventListener('change', newGame);
+  $('undoBtn').addEventListener('click', () => {
+    if (history.length === 0 || aiThinking) return;
+    const undoOne = () => {
+      const h = history.pop();
+      if (h) restore(h.snap);
+    };
+    undoOne();
+    if (st.turn === aiSide && history.length > 0) undoOne();
+    gameOver = false; winner = null; selected = null; dests = []; moveError = null; pendingPromo = null;
+    promoEl.classList.remove('show');
+    render();
+  });
+
+  // Debug / test hook: set a custom position. pieces = [[char, file, rankIdx], ...], side = side to move.
+  window.__cv.setPosition = function (pieces, side, extra) {
+    extra = extra || {};
+    st = CV.stateFrom(pieces, side, extra.castling, extra.ep, extra.half);
+    history = []; selected = null; dests = []; moveError = null;
+    gameOver = false; winner = null; aiThinking = false; lastMove = null; pendingPromo = null;
+    promoEl.classList.remove('show');
+    render();
+    endCheck();
+  };
+  window.__cv.getState = function () {
+    return { turn: st.turn, historyLen: history.length, gameOver, winner,
+      board: st.b.slice(), legalCount: gameOver ? 0 : CV.legalMoves(st).length };
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
