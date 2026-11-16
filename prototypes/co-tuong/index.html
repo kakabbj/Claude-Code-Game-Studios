@@ -15,6 +15,7 @@
   #board svg { position: absolute; inset: 0; width: 100%; height: 100%; }
   .piece { position: absolute; width: 10.2%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%;
     display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: clamp(15px, 3.4vw, 26px);
+    font-family: "Noto Serif CJK SC", "Songti SC", "SimSun", "Times New Roman", serif;
     background: radial-gradient(circle at 35% 30%, #fff8e0, #f0d9a0 70%); border: 2px solid #8a6d3b; box-shadow: 0 2px 4px rgba(0,0,0,.45);
     cursor: pointer; user-select: none; z-index: 3; }
   .piece.red { color: #c0392b; border-color: #c0392b; }
@@ -112,7 +113,7 @@
       <div class="cap" id="capBlack">Đen ăn: —</div>
       <h2 style="margin-top:12px">Nước đi</h2>
       <ol id="history"></ol>
-      <p class="legend">Ký hiệu quân: T = Tướng, S = Sĩ, V = Tượng (Voi), X = Xe, M = Mã, P = Pháo, B = Tốt (Binh).<br>
+      <p class="legend">Quân Đỏ: 帥 Tướng, 仕 Sĩ, 相 Tượng, 俥 Xe, 傌 Mã, 炮 Pháo, 兵 Tốt &nbsp;—&nbsp; Quân Đen: 將, 士, 象, 車, 馬, 砲, 卒.<br>
       Bấm vào 1 quân của bạn để xem các nước đi được, rồi bấm vào ô đích để đi.</p>
     </div>
   </div>
@@ -131,6 +132,8 @@ const XQ = (() => {
   const VAL = { K: 100000, A: 120, E: 120, R: 600, N: 270, C: 300, P: 60 };
   const NAME = { K: 'Tướng', A: 'Sĩ', E: 'Tượng', R: 'Xe', N: 'Mã', C: 'Pháo', P: 'Tốt' };
   const LETTER = { K: 'T', A: 'S', E: 'V', R: 'X', N: 'M', C: 'P', P: 'B' };
+  // Ky tu tren quan co nhu co tuong that (chu Han truyen thong, khac nhau theo ben).
+  const CHAR = { K: '帥', k: '將', A: '仕', a: '士', E: '相', e: '象', R: '俥', r: '車', N: '傌', n: '馬', C: '炮', c: '砲', P: '兵', p: '卒' };
   const idx = (x, y) => y * 9 + x;
   const inB = (x, y) => x >= 0 && x < 9 && y >= 0 && y < 10;
   const sideOf = p => p ? (p === p.toUpperCase() ? 'r' : 'b') : null;
@@ -352,7 +355,7 @@ const XQ = (() => {
     }
     return best;
   }
-  return { VAL, NAME, LETTER, idx, inB, sideOf, other, initialBoard, boardFrom,
+  return { VAL, NAME, LETTER, CHAR, idx, inB, sideOf, other, initialBoard, boardFrom,
     pseudoMoves, isAttacked, findKing, isCheck, applyMove, legalMoves, perft,
     evaluate, bestMove };
 })();
@@ -406,7 +409,7 @@ if (typeof window !== 'undefined') window.__xq = XQ;
       d.className = 'piece ' + (XQ.sideOf(p) === 'r' ? 'red' : 'black') + (selected === i ? ' sel' : '');
       d.style.left = ((i % 9 + 0.5) / 9 * 100) + '%';
       d.style.top = ((((i / 9) | 0) + 0.5) / 10 * 100) + '%';
-      d.textContent = XQ.LETTER[p.toUpperCase()];
+      d.textContent = XQ.CHAR[p];
       d.title = XQ.NAME[p.toUpperCase()];
       d.style.pointerEvents = 'none';
       piecesEl.appendChild(d);
