@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cờ Tướng — Chơi với AI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; background: #2b2118; color: #f2e8d5; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 28px; margin: 4px 0 2px; color: #ffd97a; }
+  .sub { text-align: center; color: #d8c9a8; margin-bottom: 12px; font-size: 14px; }
+  .main { display: flex; gap: 16px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  #board { position: relative; width: min(92vw, 540px); aspect-ratio: 9 / 10; background: #e8c88a; border: 4px solid #7a4a21; border-radius: 4px; flex: none; }
+  #board svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .piece { position: absolute; width: 10.2%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: clamp(15px, 3.4vw, 26px);
+    background: radial-gradient(circle at 35% 30%, #fff8e0, #f0d9a0 70%); border: 2px solid #8a6d3b; box-shadow: 0 2px 4px rgba(0,0,0,.45);
+    cursor: pointer; user-select: none; z-index: 3; }
+  .piece.red { color: #c0392b; border-color: #c0392b; }
+  .piece.black { color: #1a1a1a; border-color: #1a1a1a; }
+  .piece.sel { outline: 3px solid #ffd700; outline-offset: 1px; z-index: 4; }
+  .hl { position: absolute; width: 10.2%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; z-index: 2; pointer-events: none; }
+  .hl.last { background: rgba(255, 215, 0, .35); border-radius: 6px; }
+  .hl.dest { width: 5%; background: rgba(46, 160, 67, .75); border: 2px solid #fff; }
+  .hl.dest.cap { width: 10.2%; background: transparent; border: 3px solid #e74c3c; }
+  .panel { width: min(92vw, 340px); background: #3a2d1e; border: 1px solid #6b5233; border-radius: 8px; padding: 14px; }
+  .panel h2 { font-size: 17px; margin-bottom: 8px; color: #ffd97a; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+  label { font-size: 14px; }
+  select, button { font-size: 14px; padding: 7px 10px; border-radius: 6px; border: 1px solid #8a6d3b; background: #f7ead0; color: #2b2118; cursor: pointer; }
+  button.primary { background: #c0392b; color: #fff; border-color: #c0392b; font-weight: 700; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { font-size: 16px; font-weight: 700; min-height: 24px; margin: 4px 0; }
+  #status.check { color: #ff6b5e; }
+  #status.think { color: #7ec8ff; }
+  #history { list-style: none; max-height: 240px; overflow-y: auto; background: #241a10; border-radius: 6px; padding: 8px 10px; font-size: 14px; line-height: 1.7; }
+  #history li:nth-child(odd) { background: rgba(255,255,255,.04); }
+  .cap { font-size: 14px; line-height: 1.7; margin-top: 8px; }
+  .legend { font-size: 13px; color: #d8c9a8; margin-top: 10px; line-height: 1.7; }
+  #banner { display: none; margin-top: 10px; padding: 12px; border-radius: 8px; background: #14532d; color: #fff; font-size: 17px; font-weight: 700; text-align: center; }
+  #banner.lose { background: #7f1d1d; }
+  #banner.draw { background: #57534e; }
+  .rules { max-width: 1020px; margin: 14px auto 0; background: #3a2d1e; border: 1px solid #6b5233; border-radius: 8px; padding: 14px 18px; font-size: 14px; line-height: 1.8; }
+  .rules h2 { color: #ffd97a; font-size: 17px; margin-bottom: 6px; }
+  @media (max-width: 700px) { h1 { font-size: 22px; } .panel { width: min(94vw, 540px); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Cờ Tướng</h1>
+  <p class="sub">Chơi với máy (AI) — không cần mạng, không cần key, AI chạy ngay trong trình duyệt.</p>
+  <div class="main">
+    <div id="board" aria-label="Bàn cờ tướng">
+      <svg viewBox="0 0 540 600" aria-hidden="true">
+        <rect x="30" y="30" width="480" height="540" fill="none" stroke="#7a4a21" stroke-width="3"/>
+        <g stroke="#7a4a21" stroke-width="2">
+          <!-- horizontal lines -->
+          <line x1="30" y1="30" x2="510" y2="30"/><line x1="30" y1="90" x2="510" y2="90"/>
+          <line x1="30" y1="150" x2="510" y2="150"/><line x1="30" y1="210" x2="510" y2="210"/>
+          <line x1="30" y1="270" x2="510" y2="270"/><line x1="30" y1="330" x2="510" y2="330"/>
+          <line x1="30" y1="390" x2="510" y2="390"/><line x1="30" y1="450" x2="510" y2="450"/>
+          <line x1="30" y1="510" x2="510" y2="510"/><line x1="30" y1="570" x2="510" y2="570"/>
+          <!-- vertical lines: edges full, inner split at the river -->
+          <line x1="30" y1="30" x2="30" y2="570"/><line x1="510" y1="30" x2="510" y2="570"/>
+          <line x1="90" y1="30" x2="90" y2="270"/><line x1="90" y1="330" x2="90" y2="570"/>
+          <line x1="150" y1="30" x2="150" y2="270"/><line x1="150" y1="330" x2="150" y2="570"/>
+          <line x1="210" y1="30" x2="210" y2="270"/><line x1="210" y1="330" x2="210" y2="570"/>
+          <line x1="270" y1="30" x2="270" y2="270"/><line x1="270" y1="330" x2="270" y2="570"/>
+          <line x1="330" y1="30" x2="330" y2="270"/><line x1="330" y1="330" x2="330" y2="570"/>
+          <line x1="390" y1="30" x2="390" y2="270"/><line x1="390" y1="330" x2="390" y2="570"/>
+          <line x1="450" y1="30" x2="450" y2="270"/><line x1="450" y1="330" x2="450" y2="570"/>
+          <!-- palace diagonals -->
+          <line x1="210" y1="30" x2="330" y2="150"/><line x1="330" y1="30" x2="210" y2="150"/>
+          <line x1="210" y1="450" x2="330" y2="570"/><line x1="330" y1="450" x2="210" y2="570"/>
+        </g>
+        <g fill="#7a4a21">
+          <circle cx="90" cy="150" r="4"/><circle cx="390" cy="150" r="4"/>
+          <circle cx="90" cy="450" r="4"/><circle cx="390" cy="450" r="4"/>
+          <circle cx="30" cy="210" r="4"/><circle cx="150" cy="210" r="4"/><circle cx="270" cy="210" r="4"/><circle cx="390" cy="210" r="4"/><circle cx="510" cy="210" r="4"/>
+          <circle cx="30" cy="390" r="4"/><circle cx="150" cy="390" r="4"/><circle cx="270" cy="390" r="4"/><circle cx="390" cy="390" r="4"/><circle cx="510" cy="390" r="4"/>
+        </g>
+        <text x="270" y="312" text-anchor="middle" font-size="30" fill="#8a6d3b" opacity="0.55" font-weight="700">SÔNG</text>
+      </svg>
+      <div id="hl"></div>
+      <div id="pieces"></div>
+    </div>
+    <div class="panel">
+      <h2>Ván cờ</h2>
+      <div class="row">
+        <label>Độ khó:
+          <select id="diff">
+            <option value="1">Dễ</option>
+            <option value="2" selected>Vừa</option>
+            <option value="3">Khó</option>
+          </select>
+        </label>
+        <label>Bạn chơi:
+          <select id="side">
+            <option value="r" selected>Đỏ (đi trước)</option>
+            <option value="b">Đen (AI đi trước)</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <button class="primary" id="newBtn">Ván mới</button>
+        <button id="undoBtn">Hoàn tác</button>
+      </div>
+      <div id="status">Lượt của bạn (Đỏ).</div>
+      <div id="banner"></div>
+      <div class="cap" id="capRed">Đỏ ăn: —</div>
+      <div class="cap" id="capBlack">Đen ăn: —</div>
+      <h2 style="margin-top:12px">Nước đi</h2>
+      <ol id="history"></ol>
+      <p class="legend">Ký hiệu quân: T = Tướng, S = Sĩ, V = Tượng (Voi), X = Xe, M = Mã, P = Pháo, B = Tốt (Binh).<br>
+      Bấm vào 1 quân của bạn để xem các nước đi được, rồi bấm vào ô đích để đi.</p>
+    </div>
+  </div>
+  <div class="rules">
+    <h2>Luật chơi (tóm tắt)</h2>
+    <p>Đỏ đi trước. <b>Tướng</b> đi 1 ô dọc/ngang trong cung, hai Tướng không được đối mặt nhau trên cùng một cột khi giữa không có quân nào.
+    <b>Sĩ</b> đi 1 ô chéo trong cung. <b>Tượng</b> đi 2 ô chéo, không qua sông, bị chặn ở điểm giữa (mắt Tượng).
+    <b>Mã</b> đi 1 dọc + 1 chéo, bị chặn ở điểm kề (chân Mã). <b>Xe</b> đi dọc/ngang bao xa cũng được.
+    <b>Pháo</b> đi như Xe khi không ăn quân, ăn quân phải nhảy qua đúng 1 quân (bệ Pháo).
+    <b>Tốt</b> đi thẳng 1 ô, qua sông rồi mới được đi ngang. Chiếu hết thì thắng; bí nước (không còn nước đi hợp lệ) cũng thua. Hòa khi 60 nước liên tiếp không ăn quân.</p>
+  </div>
+</div>
+<script>
+/* ENGINE-START */
+const XQ = (() => {
+  const VAL = { K: 100000, A: 120, E: 120, R: 600, N: 270, C: 300, P: 60 };
+  const NAME = { K: 'Tướng', A: 'Sĩ', E: 'Tượng', R: 'Xe', N: 'Mã', C: 'Pháo', P: 'Tốt' };
+  const LETTER = { K: 'T', A: 'S', E: 'V', R: 'X', N: 'M', C: 'P', P: 'B' };
+  const idx = (x, y) => y * 9 + x;
+  const inB = (x, y) => x >= 0 && x < 9 && y >= 0 && y < 10;
+  const sideOf = p => p ? (p === p.toUpperCase() ? 'r' : 'b') : null;
+  const other = s => s === 'r' ? 'b' : 'r';
+
+  function initialBoard() {
+    const b = new Array(90).fill(null);
+    const back = ['R', 'N', 'E', 'A', 'K', 'A', 'E', 'N', 'R'];
+    for (let x = 0; x < 9; x++) { b[idx(x, 0)] = back[x].toLowerCase(); b[idx(x, 9)] = back[x]; }
+    b[idx(1, 2)] = 'c'; b[idx(7, 2)] = 'c'; b[idx(1, 7)] = 'C'; b[idx(7, 7)] = 'C';
+    for (let x = 0; x < 9; x += 2) { b[idx(x, 3)] = 'p'; b[idx(x, 6)] = 'P'; }
+    return b;
+  }
+  function boardFrom(list) {
+    const b = new Array(90).fill(null);
+    for (const [p, x, y] of list) b[idx(x, y)] = p;
+    return b;
+  }
+  function inPalace(x, y, side) {
+    return x >= 3 && x <= 5 && (side === 'r' ? (y >= 7 && y <= 9) : (y >= 0 && y <= 2));
+  }
+  function crossed(x, y, side) { return side === 'r' ? y <= 4 : y >= 5; }
+
+  function pseudoMoves(b, x, y) {
+    const p = b[idx(x, y)];
+    if (!p) return [];
+    const s = sideOf(p), t = p.toUpperCase(), out = [];
+    const from = idx(x, y);
+    const add = (nx, ny) => {
+      if (!inB(nx, ny)) return false;
+      const q = b[idx(nx, ny)];
+      if (!q) { out.push({ from, to: idx(nx, ny), captured: null }); return true; }
+      if (sideOf(q) !== s) out.push({ from, to: idx(nx, ny), captured: q });
+      return false;
+    };
+    const d4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    if (t === 'K') {
+      for (const [dx, dy] of d4) { const nx = x + dx, ny = y + dy; if (inPalace(nx, ny, s)) add(nx, ny); }
+    } else if (t === 'A') {
+      for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = x + dx, ny = y + dy; if (inPalace(nx, ny, s)) add(nx, ny);
+      }
+    } else if (t === 'E') {
+      for (const [dx, dy] of [[2, 2], [2, -2], [-2, 2], [-2, -2]]) {
+        const nx = x + dx, ny = y + dy;
+        if (inB(nx, ny) && !b[idx(x + dx / 2, y + dy / 2)] && !crossed(nx, ny, s)) add(nx, ny);
+      }
+    } else if (t === 'N') {
+      for (const [dx, dy] of [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]]) {
+        let lx, ly;
+        if (Math.abs(dx) === 1) { lx = x; ly = y + Math.sign(dy); }
+        else { lx = x + Math.sign(dx); ly = y; }
+        if (b[idx(lx, ly)]) continue;
+        add(x + dx, y + dy);
+      }
+    } else if (t === 'R') {
+      for (const [dx, dy] of d4) {
+        let nx = x + dx, ny = y + dy;
+        while (inB(nx, ny)) { if (!add(nx, ny)) break; nx += dx; ny += dy; }
+      }
+    } else if (t === 'C') {
+      for (const [dx, dy] of d4) {
+        let nx = x + dx, ny = y + dy, screen = false;
+        while (inB(nx, ny)) {
+          const q = b[idx(nx, ny)];
+          if (!screen) {
+            if (!q) out.push({ from, to: idx(nx, ny), captured: null });
+            else screen = true;
+          } else if (q) {
+            if (sideOf(q) !== s) out.push({ from, to: idx(nx, ny), captured: q });
+            break;
+          }
+          nx += dx; ny += dy;
+        }
+      }
+    } else if (t === 'P') {
+      const fwd = s === 'r' ? -1 : 1;
+      add(x, y + fwd);
+      if (crossed(x, y, s)) { add(x - 1, y); add(x + 1, y); }
+    }
+    return out;
+  }
+
+  function isAttacked(b, tx, ty, by) {
+    for (let i = 0; i < 90; i++) {
+      const p = b[i];
+      if (!p || sideOf(p) !== by) continue;
+      const x = i % 9, y = (i / 9) | 0, t = p.toUpperCase();
+      if (t === 'K') {
+        if (x === tx) {
+          let blocked = false;
+          for (let yy = Math.min(y, ty) + 1; yy < Math.max(y, ty); yy++) if (b[idx(x, yy)]) { blocked = true; break; }
+          if (!blocked) return true;
+        }
+        if (Math.abs(x - tx) + Math.abs(y - ty) === 1) return true;
+        continue;
+      }
+      if (t === 'A') { if (Math.abs(x - tx) === 1 && Math.abs(y - ty) === 1) return true; continue; }
+      if (t === 'E') {
+        if (Math.abs(x - tx) === 2 && Math.abs(y - ty) === 2 && !b[idx((x + tx) / 2, (y + ty) / 2)]) return true;
+        continue;
+      }
+      if (t === 'N') {
+        const dx = tx - x, dy = ty - y, adx = Math.abs(dx), ady = Math.abs(dy);
+        if ((adx === 1 && ady === 2) || (adx === 2 && ady === 1)) {
+          let lx, ly;
+          if (adx === 1) { lx = x; ly = y + Math.sign(dy); } else { lx = x + Math.sign(dx); ly = y; }
+          if (!b[idx(lx, ly)]) return true;
+        }
+        continue;
+      }
+      if (t === 'R') {
+        if (x === tx || y === ty) {
+          let blocked = false;
+          if (x === tx) { for (let yy = Math.min(y, ty) + 1; yy < Math.max(y, ty); yy++) if (b[idx(x, yy)]) { blocked = true; break; } }
+          else { for (let xx = Math.min(x, tx) + 1; xx < Math.max(x, tx); xx++) if (b[idx(xx, y)]) { blocked = true; break; } }
+          if (!blocked) return true;
+        }
+        continue;
+      }
+      if (t === 'C') {
+        if (x === tx || y === ty) {
+          let screens = 0;
+          if (x === tx) { for (let yy = Math.min(y, ty) + 1; yy < Math.max(y, ty); yy++) if (b[idx(x, yy)]) screens++; }
+          else { for (let xx = Math.min(x, tx) + 1; xx < Math.max(x, tx); xx++) if (b[idx(xx, y)]) screens++; }
+          if (screens === 1) return true;
+        }
+        continue;
+      }
+      if (t === 'P') {
+        const fwd = by === 'r' ? -1 : 1;
+        if (tx === x && ty === y + fwd) return true;
+        if (crossed(x, y, by) && ty === y && Math.abs(tx - x) === 1) return true;
+      }
+    }
+    return false;
+  }
+
+  function findKing(b, side) {
+    const k = side === 'r' ? 'K' : 'k';
+    for (let i = 0; i < 90; i++) if (b[i] === k) return i;
+    return -1;
+  }
+  function isCheck(b, side) {
+    const ki = findKing(b, side);
+    if (ki < 0) return false;
+    return isAttacked(b, ki % 9, (ki / 9) | 0, other(side));
+  }
+  function applyMove(b, mv) {
+    const nb = b.slice();
+    nb[mv.to] = nb[mv.from];
+    nb[mv.from] = null;
+    return nb;
+  }
+  function legalMoves(b, side) {
+    const out = [];
+    for (let i = 0; i < 90; i++) {
+      const p = b[i];
+      if (!p || sideOf(p) !== side) continue;
+      for (const mv of pseudoMoves(b, i % 9, (i / 9) | 0)) {
+        if (!isCheck(applyMove(b, mv), side)) out.push(mv);
+      }
+    }
+    return out;
+  }
+  function perft(b, side, depth) {
+    if (depth === 0) return 1;
+    let n = 0;
+    for (const mv of legalMoves(b, side)) n += perft(applyMove(b, mv), other(side), depth - 1);
+    return n;
+  }
+  function evaluate(b) {
+    let s = 0;
+    for (let i = 0; i < 90; i++) {
+      const p = b[i];
+      if (!p) continue;
+      const t = p.toUpperCase(), side = sideOf(p), x = i % 9, y = (i / 9) | 0;
+      let v = VAL[t];
+      if (t === 'P') {
+        v = crossed(x, y, side) ? 120 : 60;
+        v += (side === 'r' ? (9 - y) : y) * 4;
+        if (x >= 3 && x <= 5) v += 4;
+      } else if (t === 'N') {
+        if (x >= 2 && x <= 6 && y >= 2 && y <= 7) v += 8;
+      } else if (t === 'R') {
+        if (x >= 3 && x <= 5) v += 6;
+        if (y >= 3 && y <= 6) v += 4;
+      } else if (t === 'C') {
+        if (x >= 2 && x <= 6) v += 4;
+      }
+      s += side === 'r' ? v : -v;
+    }
+    return s;
+  }
+  function orderMoves(b, moves) {
+    return moves.slice().sort((a, c) => (c.captured ? VAL[c.captured.toUpperCase()] : 0) - (a.captured ? VAL[a.captured.toUpperCase()] : 0));
+  }
+  function negamax(b, side, depth, alpha, beta) {
+    if (depth === 0) return side === 'r' ? evaluate(b) : -evaluate(b);
+    const moves = orderMoves(b, legalMoves(b, side));
+    if (moves.length === 0) return -100000 - depth;
+    let best = -Infinity;
+    for (const mv of moves) {
+      const sc = -negamax(applyMove(b, mv), other(side), depth - 1, -beta, -alpha);
+      if (sc > best) best = sc;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+  function bestMove(b, side, depth, random) {
+    const moves = orderMoves(b, legalMoves(b, side));
+    if (!moves.length) return null;
+    if (random && Math.random() < 0.35) return moves[(Math.random() * moves.length) | 0];
+    let best = null, bestSc = -Infinity;
+    for (const mv of moves) {
+      const sc = -negamax(applyMove(b, mv), other(side), depth - 1, -Infinity, Infinity);
+      if (sc > bestSc) { bestSc = sc; best = mv; }
+    }
+    return best;
+  }
+  return { VAL, NAME, LETTER, idx, inB, sideOf, other, initialBoard, boardFrom,
+    pseudoMoves, isAttacked, findKing, isCheck, applyMove, legalMoves, perft,
+    evaluate, bestMove };
+})();
+/* ENGINE-END */
+if (typeof window !== 'undefined') window.__xq = XQ;
+</script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const boardEl = $('board'), piecesEl = $('pieces'), hlEl = $('hl');
+  const statusEl = $('status'), histEl = $('history'), bannerEl = $('banner');
+  const capRedEl = $('capRed'), capBlackEl = $('capBlack');
+
+  let board = XQ.initialBoard();
+  let turn = 'r';
+  let playerSide = 'r';
+  let aiSide = 'b';
+  let difficulty = 2;
+  let history = []; // {mv, snap, text}
+  let noCapture = 0;
+  let selected = null; // square index
+  let dests = [];
+  let gameOver = false;
+  let winner = null; // 'r' | 'b' | 'draw'
+  let aiThinking = false;
+  let lastMove = null;
+
+  const sqName = i => String.fromCharCode(97 + (i % 9)) + (10 - ((i / 9) | 0));
+  const moveText = mv => {
+    const p = board[mv.from];
+    const name = p ? XQ.NAME[p.toUpperCase()] : '?';
+    return name + ' ' + sqName(mv.from) + '→' + sqName(mv.to) +
+      (mv.captured ? ' (ăn ' + XQ.NAME[mv.captured.toUpperCase()] + ')' : '');
+  };
+  const sideName = s => s === 'r' ? 'Đỏ' : 'Đen';
+
+  function snapshot() {
+    return { board: board.slice(), turn, noCapture, lastMove };
+  }
+  function restore(snap) {
+    board = snap.board.slice(); turn = snap.turn; noCapture = snap.noCapture; lastMove = snap.lastMove;
+  }
+
+  function render() {
+    // pieces
+    piecesEl.innerHTML = '';
+    for (let i = 0; i < 90; i++) {
+      const p = board[i];
+      if (!p) continue;
+      const d = document.createElement('div');
+      d.className = 'piece ' + (XQ.sideOf(p) === 'r' ? 'red' : 'black') + (selected === i ? ' sel' : '');
+      d.style.left = ((i % 9 + 0.5) / 9 * 100) + '%';
+      d.style.top = ((((i / 9) | 0) + 0.5) / 10 * 100) + '%';
+      d.textContent = XQ.LETTER[p.toUpperCase()];
+      d.title = XQ.NAME[p.toUpperCase()];
+      d.style.pointerEvents = 'none';
+      piecesEl.appendChild(d);
+    }
+    // highlights
+    hlEl.innerHTML = '';
+    const mk = (cls, i) => {
+      const d = document.createElement('div');
+      d.className = 'hl ' + cls;
+      d.style.left = ((i % 9 + 0.5) / 9 * 100) + '%';
+      d.style.top = ((((i / 9) | 0) + 0.5) / 10 * 100) + '%';
+      hlEl.appendChild(d);
+    };
+    if (lastMove) { mk('last', lastMove.from); mk('last', lastMove.to); }
+    for (const mv of dests) mk(board[mv.to] ? 'dest cap' : 'dest', mv.to);
+    // captured: capR = black pieces captured by Red, capB = red pieces captured by Black
+    const capR = [], capB = [];
+    for (const h of history) {
+      if (!h.mv.captured) continue;
+      // mover side is the side that was to move before the move; recover from snapshot turn
+      if (h.snap.turn === 'r') capR.push(h.mv.captured);
+      else capB.push(h.mv.captured);
+    }
+    const names = list => list.length ? list.map(p => XQ.NAME[p.toUpperCase()]).join(', ') : '—';
+    capRedEl.textContent = 'Đỏ ăn: ' + names(capR);
+    capBlackEl.textContent = 'Đen ăn: ' + names(capB);
+    // history
+    histEl.innerHTML = '';
+    history.forEach((h, i) => {
+      const li = document.createElement('li');
+      li.textContent = (Math.floor(i / 2) + 1) + (i % 2 === 0 ? '. ' : '… ') + h.text;
+      histEl.appendChild(li);
+    });
+    if (histEl.lastChild) histEl.lastChild.scrollIntoView(false);
+    // status
+    statusEl.className = '';
+    if (gameOver) {
+      if (winner === 'draw') statusEl.textContent = 'Hòa!';
+      else statusEl.textContent = (winner === playerSide ? 'Bạn thắng!' : 'AI thắng!') + ' — ' + sideName(winner) + ' thắng.';
+    } else if (aiThinking) {
+      statusEl.textContent = 'AI đang nghĩ…';
+      statusEl.className = 'think';
+    } else if (XQ.isCheck(board, turn)) {
+      statusEl.textContent = 'Chiếu tướng! Lượt của ' + (turn === playerSide ? 'bạn' : 'AI') + ' (' + sideName(turn) + ').';
+      statusEl.className = 'check';
+    } else {
+      statusEl.textContent = 'Lượt của ' + (turn === playerSide ? 'bạn' : 'AI') + ' (' + sideName(turn) + ').';
+    }
+    // banner
+    if (gameOver) {
+      bannerEl.style.display = 'block';
+      bannerEl.className = winner === 'draw' ? 'draw' : (winner === playerSide ? '' : 'lose');
+      bannerEl.id = 'banner';
+      if (winner === 'draw') bannerEl.textContent = 'Hòa! 60 nước không ăn quân.';
+      else if (winner === playerSide) bannerEl.textContent = 'Bạn thắng! Chơi lại một ván nữa nhé.';
+      else bannerEl.textContent = 'AI thắng! Bấm “Ván mới” để phục thù.';
+    } else {
+      bannerEl.style.display = 'none';
+    }
+    $('undoBtn').disabled = history.length === 0 || aiThinking;
+  }
+
+  function endCheck() {
+    if (gameOver) return true;
+    if (noCapture >= 120) { gameOver = true; winner = 'draw'; render(); return true; }
+    const moves = XQ.legalMoves(board, turn);
+    if (moves.length === 0) {
+      gameOver = true;
+      winner = XQ.isCheck(board, turn) ? XQ.other(turn) : XQ.other(turn); // thua dù chiếu hết hay bí nước
+      render();
+      return true;
+    }
+    return false;
+  }
+
+  function doMove(mv) {
+    const text = moveText(mv);
+    const snap = snapshot();
+    const captured = mv.captured;
+    board = XQ.applyMove(board, mv);
+    noCapture = captured ? 0 : noCapture + 1;
+    turn = XQ.other(turn);
+    lastMove = mv;
+    selected = null; dests = [];
+    history.push({ mv, snap, text });
+    render();
+    if (endCheck()) return;
+    if (turn === aiSide) scheduleAi();
+  }
+
+  function scheduleAi() {
+    aiThinking = true;
+    render();
+    setTimeout(() => {
+      aiThinking = false;
+      if (gameOver) { render(); return; }
+      const depth = difficulty;
+      const mv = XQ.bestMove(board, aiSide, depth, difficulty === 1);
+      if (!mv) { endCheck(); return; }
+      doMove(mv);
+    }, 450);
+  }
+
+  function onSquare(x, y) {
+    if (gameOver || aiThinking || turn !== playerSide) return;
+    const i = XQ.idx(x, y);
+    const p = board[i];
+    if (selected !== null) {
+      const mv = dests.find(d => d.to === i);
+      if (mv) { doMove(mv); return; }
+    }
+    if (p && XQ.sideOf(p) === playerSide) {
+      selected = i;
+      dests = XQ.legalMoves(board, playerSide).filter(m => m.from === i);
+      render();
+    } else {
+      selected = null; dests = [];
+      render();
+    }
+  }
+
+  boardEl.addEventListener('click', e => {
+    const r = boardEl.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / r.width * 9);
+    const y = Math.floor((e.clientY - r.top) / r.height * 10);
+    if (x >= 0 && x < 9 && y >= 0 && y < 10) onSquare(x, y);
+  });
+
+  function newGame() {
+    board = XQ.initialBoard();
+    turn = 'r';
+    playerSide = $('side').value;
+    aiSide = XQ.other(playerSide);
+    difficulty = parseInt($('diff').value, 10);
+    history = []; noCapture = 0; selected = null; dests = [];
+    gameOver = false; winner = null; aiThinking = false; lastMove = null;
+    render();
+    if (turn === aiSide) scheduleAi();
+  }
+
+  $('newBtn').addEventListener('click', newGame);
+  $('diff').addEventListener('change', () => { difficulty = parseInt($('diff').value, 10); });
+  $('side').addEventListener('change', newGame);
+  $('undoBtn').addEventListener('click', () => {
+    if (history.length === 0 || aiThinking || gameOver && false) return;
+    const undoOne = () => {
+      const h = history.pop();
+      if (h) restore(h.snap);
+    };
+    undoOne();
+    if (turn === aiSide && history.length > 0) undoOne();
+    gameOver = false; winner = null; selected = null; dests = [];
+    render();
+  });
+
+  // Debug / test hook: set a custom position. pieces = [[char, x, y], ...], side = side to move.
+  window.__xq.setPosition = function (pieces, side) {
+    board = XQ.boardFrom(pieces);
+    turn = side || 'r';
+    history = []; noCapture = 0; selected = null; dests = [];
+    gameOver = false; winner = null; aiThinking = false; lastMove = null;
+    render();
+    endCheck();
+  };
+  window.__xq.getState = function () {
+    return { turn, historyLen: history.length, gameOver, winner,
+      board: board.slice(), legalCount: gameOver ? 0 : XQ.legalMoves(board, turn).length };
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
